@@ -3,8 +3,8 @@ title : COVID-19 modeling
 author : Nils Bertschinger
 date: 17.03.2020
 options:
-  out_path : reports/model.md
-  doctype :  github
+  out_path : reports/model.html
+  doctype :  md2html
 ---
 
 # Some thoughts on epidemic modeling
@@ -44,7 +44,7 @@ faster than the population develops, we will assume that $\Lambda =
 Then, susceptible individual become infected with rate $\beta
 \frac{I}{N}$ and the transition through the states $E \to I \to
 R$. The time spend in states $E$ and $I$ are exponentially distributed
-with averages $a$ and $\gamma$ respectively. Especially this part of
+with averages $a^{-1}$ and $\gamma^{-1}$ respectively. Especially this part of
 the model appears somewhat unrealistic and is an artifact of the use
 of differential equations instead of more elaborate models,
 e.g. integro-differential equations.
@@ -52,5 +52,131 @@ e.g. integro-differential equations.
 ```julia
 using Plots
 using DifferentialEquations
+using Random
+Random.seed!(123);
 ```
 
+```julia
+struct SEIRModel
+    Λ
+    μ
+    β
+    a
+    γ
+end
+
+function seirdynamics!(du, u, θ::SEIRModel, t)
+    S, E, I, R = u
+    N = S + E + I + R
+    du[1] = θ.Λ - θ.μ * S - θ.β * I / N * S
+    du[2] = θ.β * I / N * S - (θ.μ + θ.a) * E
+    du[3] = θ.a * E - (θ.γ + θ.μ) * I
+    du[4] = θ.γ * I - θ.μ * R
+end
+```
+
+```julia
+θ = SEIRModel(0.0, 0.0, 0.5, 0.35, 0.2)
+u₀ = [1.0e6 - 1, 0.0, 1.0, 0.0]
+tspan = (0.0, 250.0)
+seir = ODEProblem(seirdynamics!, u₀, tspan, θ)
+sol = solve(seir)
+plot(sol)
+```
+
+### Agent-based model
+
+Here, we consider a similar agent-based model where each agent
+deterministically transitions through the states $E \to I \to R$ after
+some fixed time.
+
+```julia
+struct AgentState
+    tag::Symbol
+    τ::Int
+end
+
+struct AgentParams
+    β::Float64
+    τₑ::Int64
+    τᵢ::Int64
+end
+
+function agentstep(s::AgentState, θ::AgentParams, pᵢ)
+    if (s.tag == :S) && (rand() < pᵢ)
+        ## Become exposed for τₑ days
+        AgentState(:E, θ.τₑ)
+    elseif (s.tag == :E)
+        if (s.τ > 0)
+            AgentState(:E, s.τ - 1)
+        else
+            ## Become infected for τᵢ days
+            AgentState(:I, θ.τᵢ)
+        end
+    elseif (s.tag == :I)
+        if (s.τ > 0)
+            AgentState(:I, s.τ - 1)
+        else
+            ## Recover
+            AgentState(:R, 0)
+        end
+    else
+        ## Return state unchanged
+        s
+    end
+end
+
+function populationstep(pop::AbstractVector{AgentState}, θ::AgentParams)
+    N = length(pop)
+    I = count(s -> s.tag == :I, pop)
+    S = count(s -> s.tag == :S, pop)
+    pᵢ = θ.β * I / N
+    @show pᵢ
+    [ agentstep(s, θ, pᵢ) for s in pop ]
+end
+
+function populationstats(pop::AbstractVector{AgentState})
+    [count(a -> a.tag == :S, pop),
+     count(a -> a.tag == :E, pop),
+     count(a -> a.tag == :I, pop),
+     count(a -> a.tag == :R, pop)]
+end
+
+function simulate(x₀, step, n; stats = identity)
+    x = copy(x₀)
+    sim = [stats(x)]
+    for i = 1:n
+        x .= step(x)
+        push!(sim, stats(x))
+    end
+    sim
+end
+```
+
+```julia
+θ = AgentParams(0.5, 3, 5)
+pop₀ = vcat(repeat([AgentState(:I, 5)], 1),
+            repeat([AgentState(:S, 0)], 1000000 - 1))
+sim = simulate(pop₀, p -> populationstep(p, θ), 250;
+               stats = populationstats)
+plot(hcat(sim...)')
+```
+
+Note that the model has a notably different dynamics than the SEIR
+model!
+
+### Discrete, statistical model
+
+#### Version 1
+
+```julia
+```
+
+#### Version 2
+
+```julia
+```
+
+## Model fitting
+
+Switch to *Stan* now ...

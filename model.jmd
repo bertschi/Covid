@@ -1,0 +1,56 @@
+---
+title : COVID-19 modeling
+author : Nils Bertschinger
+date: 17.03.2020
+options:
+  out_path : reports/model.md
+  doctype :  github
+---
+
+# Some thoughts on epidemic modeling
+
+The current COVID-19 pandemic is spreading and policy makers around
+the globe implement restrictive measures trying to curtail it. Yet,
+much is unknown/uncertain and the question remains: *How effective are
+current measures and can they work at all?*
+
+## Epidemic models
+
+Most epidemic models rely on differential equations, e.g. the famous
+SIR model. Here, we will discuss these and related models in order to
+understand their dynamics. In turn, we will fit models to recent data
+and investigate possible scenarios ...
+
+### The SEIR model
+
+The SEIR model adds an incubation period (exposed) to the classical
+SIR (susceptible-infected-recovered) model. Its dynamics is given as
+
+$$
+\begin{align*}
+	\frac{dS}{dt} &= \Lambda - \mu S - \beta \frac{I}{N} S \\
+	\frac{dE}{dt} &= \beta \frac{I}{N} S - (\mu + a) E \\
+	\frac{dI}{dt} &= a E - (\gamma + \mu) I \\
+	\frac{dR}{dt} &= \gamma I - \mu R
+\end{align*}
+$$
+
+with $N = S + E + I + N$ and transition rate parameters $\beta, a$ and
+$\gamma$. In addition, a general birth $\Lambda$ and death rate $\mu$
+of the population is assumed. Here, as the infection spreads much
+faster than the population develops, we will assume that $\Lambda =
+\mu \equiv 0$.
+
+Then, susceptible individual become infected with rate $\beta
+\frac{I}{N}$ and the transition through the states $E \to I \to
+R$. The time spend in states $E$ and $I$ are exponentially distributed
+with averages $a$ and $\gamma$ respectively. Especially this part of
+the model appears somewhat unrealistic and is an artifact of the use
+of differential equations instead of more elaborate models,
+e.g. integro-differential equations.
+
+```julia
+using Plots
+using DifferentialEquations
+```
+

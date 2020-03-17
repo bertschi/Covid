@@ -4,8 +4,16 @@ author : Nils Bertschinger
 date: 17.03.2020
 options:
   out_path : reports/model.html
-  doctype :  pandoc2html
+  doctype :  md2html
 ---
+
+```julia
+using Plots
+using DifferentialEquations
+using Distributions
+using Random
+Random.seed!(123);
+```
 
 # Some thoughts on epidemic modeling
 
@@ -48,13 +56,6 @@ with averages $a^{-1}$ and $\gamma^{-1}$ respectively. Especially this part of
 the model appears somewhat unrealistic and is an artifact of the use
 of differential equations instead of more elaborate models,
 e.g. integro-differential equations.
-
-```julia
-using Plots
-using DifferentialEquations
-using Random
-Random.seed!(123);
-```
 
 ```julia
 struct SEIRModel
@@ -107,14 +108,14 @@ function agentstep(s::AgentState, θ::AgentParams, pᵢ)
         ## Become exposed for τₑ days
         AgentState(:E, θ.τₑ)
     elseif (s.tag == :E)
-        if (s.τ > 0)
+        if (s.τ > 1)
             AgentState(:E, s.τ - 1)
         else
             ## Become infected for τᵢ days
             AgentState(:I, θ.τᵢ)
         end
     elseif (s.tag == :I)
-        if (s.τ > 0)
+        if (s.τ > 1)
             AgentState(:I, s.τ - 1)
         else
             ## Recover
@@ -213,13 +214,14 @@ end
 
 function deltastep(ΔI::AbstractVector, θ::DeltaParams)
     S, E, I, R = deltastats(ΔI, θ)
-    vcat(θ.β * I / θ.N * S, ΔI)
+    ## vcat(θ.β * I / θ.N * S, ΔI)
+    vcat(rand(Binomial(S, θ.β * I / θ.N)), ΔI)
 end
 ```
 
 ```julia
-θ = DeltaParams(1e6, 0.5, 3, 5)
-sim = simulate(vcat([1.0], repeat([0.0], θ.τₑ + θ.τᵢ)),
+θ = DeltaParams(1000000, 0.5, 3, 5)
+sim = simulate(vcat([1], repeat([0], θ.τₑ + θ.τᵢ)),
                ΔI -> deltastep(ΔI, θ), 250;
                stats = ΔI -> deltastats(ΔI, θ))
 plot(hcat(sim...)')
@@ -227,8 +229,22 @@ plot(hcat(sim...)')
 
 #### Version 2
 
-```julia
-```
+A more realistic version of the above model can be defined, by
+relaxing the assumption of deterministic transitions after a fixed
+number of days. This can for example be achieved by using a
+weighting/survival function giving the probability that an agent is
+still exposed/infected after a certain number of days. E.g. the number
+of exposed agents is then given as $E_t = \sum_{\tau = 0}^{\infty}
+w_E(\tau) \Delta I_{t-\tau}$ where $w_E(\tau) = 1 - \frac{1}{1 + e^{-
+\alpha_E (\tau - \tau_E)}}$ for instance.
+
+Compared to the differential equation SEIR model, such a model has
+several advantages:
+
+* It is more realistic and can easily be extended to incorporated even
+  more elaborate transition dynamics.
+  
+* It can easily be fitted to data using *Stan* ... as we will show below.
 
 ## Model fitting
 

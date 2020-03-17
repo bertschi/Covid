@@ -1,6 +1,6 @@
 ---
 title : COVID-19 modeling
-author : Nils Bertschinger
+author : Nils Bertschinger & Rajbir Nirwan
 date: 17.03.2020
 options:
   out_path : reports/model.html
@@ -182,10 +182,10 @@ time. Then, the state variables are recovered as
 
 $$
 \begin{align*}
-	S_t = N - \sum_{\tau = 0}^{\infty} \Delta I_{t-\tau}
-	E_t = \sum_{\tau = 0}^{\tau_E-1} \Delta I_{t-\tau}
-	I_t = \sum_{\tau = \tau_E}^{\tau_E + \tau_I - 1} \Delta I_{t-\tau}
-	R_t = \sum_{\tau = \tau_E + \tau_I}^{\infty} \Delta I_{t-\tau}
+	S_t &= N - \sum_{\tau = 0}^{\infty} \Delta I_{t-\tau} \\
+	E_t &= \sum_{\tau = 0}^{\tau_E-1} \Delta I_{t-\tau} \\
+	I_t &= \sum_{\tau = \tau_E}^{\tau_E + \tau_I - 1} \Delta I_{t-\tau} \\
+	R_t &= \sum_{\tau = \tau_E + \tau_I}^{\infty} \Delta I_{t-\tau}
 \end{align*}
 $$
 
@@ -244,8 +244,25 @@ several advantages:
 * It is more realistic and can easily be extended to incorporated even
   more elaborate transition dynamics.
   
+* It allows to track and analyze the number of people in each stage of
+  the infection, e.g. how many people had been infected two days ago.
+  
+  In turn, this information can be connected to the observed data,
+  i.e. the number of cases and deaths.
+
 * It can easily be fitted to data using *Stan* ... as we will show below.
 
 ## Model fitting
 
 Switch to *Stan* now ...
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+library(bayesplot)
+library(rstan)
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+```
+

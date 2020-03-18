@@ -257,7 +257,7 @@ several advantages:
   In turn, this information can be connected to the observed data,
   i.e. the number of cases and deaths.
 
-* It can easily be fitted to data using *Stan* ... as we will show below.
+* It can (easily) be fitted to data using *Stan* ... as we will show below.
 
 ## Model fitting
 
@@ -315,24 +315,88 @@ df %>%
 
 ### Stan models
 
+```{stan output.var="model_v1"}
+data {
+  int<lower=1> N;
+  int<lower=1> M;
+  int<lower=1> L;
+  int d_values[N];
+}
+parameters {
+  real<lower=0> a;
+}
+model {
+  a ~ normal(0, 3);
+  for (i in 2:N){
+    int s;
+    int s_all = sum(d_values[:i-1]);
+    if (M>=i)
+      s = s_all;
+    else
+      s = sum(d_values[i-M:i-1]);
+    d_values[i] ~ binomial(L-s_all, a*(s + 1e-3)/L); // Note: Added 1e-3 cases to prevent prob. of zero
+  }
+}
+// TODO: Add model predictions and likelihoods ...
+```
+
+Above is the first model that we discussed on monday ...
+
+```{r}
+## Test model on German data
+DeltaI <- df %>%
+    filter(`Country/Region` == "Germany") %>%
+    arrange(Date) %>%
+    mutate(DeltaI = Cases - lag(Cases)) %>%
+    select(Date, DeltaI) %>%
+    drop_na()
+
+fit_v1 <- sampling(model_v1,
+                   data = list(N = nrow(DeltaI),
+                               M = 5,
+                               L = 80000000,
+                               d_values = DeltaI$DeltaI))
+
+traceplot(fit_v1)
+```
+
+The attempt below to extend this model using a weighting function does
+not yet work. There are several problems
+
+* State variables become continuous, so binomial observation model is
+  no longer feasible (maybe use normal approximation?)
+  
+* Sampling from hidden state, i.e. actual number/fraction of cases vs
+  observed cases, is definitely preferable. Yet, sampling is probably
+  much harder in this case and the correct sampling distribution is
+  unclear to me at the moment.
+  
+  Model from https://github.com/jriou/covid_adjusted_cfr integrates
+  SEIR type ODE and then assumes negative binomial sampling
+  distribution. Our model should at least be simpler to solve than
+  this ...
+
 ```{stan output.var="model_v2"}
 data {
   int<lower=0> T;        // number of observations
   int<lower=0> cases[T]; // total number of cases
   int<lower=1> N;        // population size
+  int<lower=1> T0;       // Length of initial pseudo-observations
 }
 parameters {
-  vector<lower=0>[7] deltaI0; // How many initial values do we need here?
+  real<lower=0> deltaI0; // Initial infections ... will be spread evenly across T0 days
   real<lower=0> beta;
   real<lower=0> tauE;
   real<lower=tauE> tauI;
 }
 transformed parameters {
-  vector[T-1+7] deltaI;
+  vector[T0 + T - 1] deltaI;
 
-  deltaI[1:7] = deltaI0;
-  for (t in 8:(T-1+7)) {
-    real S = N - sum(deltaI[1:(t-1)]);
+  for (t in 1:T0)
+    deltaI[t] = deltaI0 / T0;
+  
+  for (t in (T0 + 1):(T0 + T - 1)) {
+    real S = N - sum(deltaI[1:(t - 1)]);
     real E;
     real I;
     real R;
@@ -355,11 +419,28 @@ model {
   tauE ~ normal(3, 2);
   tauI ~ normal(3 + 5, 2);
 
-  for (t in 8:(T-1+7)) {
-    int ti = t - 7;
+  for (t in (T0 + 1):(T0 + T - 1)) {
+    int ti = t - T0;
     int S = N - cases[ti];
     cases[ti + 1] - cases[ti] ~ binomial(S, deltaI[t] / S);
   }  
 }
 ```
 
+TODO:
+
+* Add death and recovery to model in order to learn from all three
+  observed time series.
+  
+* Add change in transmission rate to model preventive measures
+  implemented by many countries.
+  
+  Good way seems to be assumption of sigmoid like transition between
+  high and low value. Compared to discrete change point this has the
+  advantage that it only contains continuous parameters.
+  
+* Create hierarchical model which can pool information across
+  different countries.
+  
+  Which parameters are country specific and which apply everywhere,
+  i.e. are disease specific?

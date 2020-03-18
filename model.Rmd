@@ -221,14 +221,14 @@ end
 
 function deltastep(ΔI::AbstractVector, θ::DeltaParams)
     S, E, I, R = deltastats(ΔI, θ)
-    ## vcat(θ.β * I / θ.N * S, ΔI)
-    vcat(rand(Binomial(S, θ.β * I / θ.N)), ΔI)
+    vcat(θ.β * I / θ.N * S, ΔI)
+    ## vcat(rand(Binomial(S, θ.β * I / θ.N)), ΔI)
 end
 ```
 
 ```{julia}
 θ = DeltaParams(1000000, 0.5, 3, 5)
-sim = simulate(vcat([1], repeat([0], θ.τₑ + θ.τᵢ)),
+sim = simulate(vcat([1.0], repeat([0], θ.τₑ + θ.τᵢ)),
                ΔI -> deltastep(ΔI, θ), 250;
                stats = ΔI -> deltastats(ΔI, θ))
 plot(hcat(sim...)')
@@ -258,6 +258,44 @@ several advantages:
   i.e. the number of cases and deaths.
 
 * It can (easily) be fitted to data using *Stan* ... as we will show below.
+
+```{julia}
+struct DeltaParamsV2
+    N
+    β::Float64
+    wₑ::Function
+    wᵢ::Function
+end
+
+function deltastatsV2(ΔI::AbstractVector, θ::DeltaParamsV2)
+    ## Note: ΔI is stored backwards in time, i.e. newest at smallest index
+    S = θ.N - sum(ΔI)
+    n = length(ΔI)
+    E = sum(ΔI .* θ.wₑ.(0:(n-1)))
+    I = sum(ΔI .* θ.wᵢ.(0:(n-1))) - E
+    R = θ.N - (S + E + I)
+    [S, E, I, R]
+end
+
+function deltastepV2(ΔI::AbstractVector, θ::DeltaParamsV2)
+    S, E, I, R = deltastatsV2(ΔI, θ)
+    vcat(θ.β * I / θ.N * S, ΔI)
+    ## vcat(rand(Binomial(S, θ.β * I / θ.N)), ΔI)
+end
+```
+
+```{julia}
+σ(x) = 1 / (1 + exp(-x))
+
+θ = DeltaParamsV2(1000000,
+                  0.5,
+                  τ -> 1 - σ(10 * (τ - 2.5)),
+                  τ -> 1 - σ(10 * (τ - 2.5 - 5)))
+sim = simulate([1.0],
+               ΔI -> deltastepV2(ΔI, θ), 250;
+               stats = ΔI -> deltastatsV2(ΔI, θ))
+plot(hcat(sim...)')
+```
 
 ## Model fitting
 

@@ -297,6 +297,55 @@ sim = simulate([1.0],
 plot(hcat(sim...)')
 ```
 
+### Stochastic models
+
+Here, we implement models similar to the ones discussed in
+[Li et al.](https://journals.sagepub.com/doi/10.1177/0962280217747054).
+
+```{julia}
+struct StochasticParams
+    N
+    β::Float64
+    wₑ::Function
+    wᵢ::Function
+    δₚ::Float64
+    δₒ::Float64
+    pₒ::Float64
+end
+
+BetaBin(n, p, δ) = BetaBinomial(n, δ / (1 - p), δ / p)
+
+function stochstatsDiscrete(ΔI::AbstractVector, θ::StochasticParams)
+    ## Note: ΔI is stored backwards in time, i.e. newest at smallest index
+    S = θ.N - sum(ΔI)
+    n = length(ΔI)
+    E = sum(ΔI .* θ.wₑ.(0:(n-1)))
+    I = sum(ΔI .* θ.wᵢ.(0:(n-1))) - E
+    R = θ.N - (S + E + I)
+    O = rand(BetaBin(ΔI[1], θ.pₒ, θ.δₒ))
+    [S, E, I, R, O]
+end
+
+function stochstepDiscrete(ΔI::AbstractVector, θ::StochasticParams)
+    S, E, I, R = stochstatsDiscrete(ΔI, θ)
+    vcat(rand(BetaBin(S, θ.β * I / θ.N, θ.δₚ)), ΔI)
+end
+```
+
+```{julia}
+σ(x) = 1 / (1 + exp(-x))
+
+θ = StochasticParams(1000000,
+                     0.5,
+                     τ -> 1 - σ(10 * (τ - 2.5)),
+                     τ -> 1 - σ(10 * (τ - 2.5 - 5)),
+                     10.0, 10.0, 0.4)
+sim = simulate([1],
+               ΔI -> stochstepDiscrete(ΔI, θ), 250;
+               stats = ΔI -> stochstatsDiscrete(ΔI, θ))
+plot(hcat(sim...)')
+```
+
 ## Model fitting
 
 Switch to *Stan* now ...
@@ -409,7 +458,7 @@ not yet work. There are several problems
   much harder in this case and the correct sampling distribution is
   unclear to me at the moment.
   
-  Model from https://github.com/jriou/covid_adjusted_cfr integrates
+  Model from [github.com/jriou](https://github.com/jriou/covid_adjusted_cfr) integrates
   SEIR type ODE and then assumes negative binomial sampling
   distribution. Our model should at least be simpler to solve than
   this ...

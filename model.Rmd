@@ -322,6 +322,7 @@ function stochstatsDiscrete(ΔI::AbstractVector, θ::StochasticParams)
     E = sum(ΔI .* θ.wₑ.(0:(n-1)))
     I = sum(ΔI .* θ.wᵢ.(0:(n-1))) - E
     R = θ.N - (S + E + I)
+    ## Note: Observed number of new infections
     O = rand(BetaBin(ΔI[1], θ.pₒ, θ.δₒ))
     [S, E, I, R, O]
 end
@@ -531,3 +532,52 @@ TODO:
   
   Which parameters are country specific and which apply everywhere,
   i.e. are disease specific?
+
+```{stan output.var="model_stoch"}
+// Stochastic model with continuous latent variable
+data {
+  int<lower=0> T;            // number of observations
+  int<lower=0> deltaIobs[T]; // observed number of new cases per day
+  int<lower=1> N;            // population size
+}
+parameters {
+  real<lower=0> beta;
+  real<lower=0> tauE;
+  real<lower=tauE> tauI;
+  real<lower=0, upper=1> pobs;
+  real<lower=1> delta;
+  real<lower=0> deltaobs;
+  real<lower=0> deltaI[T+1]; // latent number of new cases per day
+}
+model {
+  beta ~ normal(0, 1);
+  tauE ~ normal(3, 2);
+  tauI ~ normal(3 + 5, 2);
+  pobs ~ beta(10, 10);
+  
+  for (t in 2:(T+1)) {
+    real S = N - sum(deltaI[1:(t-1)]);
+    real E; real I; real R;
+
+    E = 0;
+    for (tau in 1:(t-1))
+      E += (1 - inv_logit(8 * (tau - tauE))) * deltaI[t - tau];
+
+    I = - E;
+    for (tau in 1:(t-1))
+      I += (1 - inv_logit(8 * (tau - tauI))) * deltaI[t - tau];
+
+    R = N - (S + E + I);
+
+    // Want to match beta-binomial with mean S * beta * I / N and overdispersion delta
+    {
+      real p = beta * I / N;
+      real mu = S * p;
+      real sig2 = S * p * (1 - p) * delta;
+      deltaI[t] ~ gamma(mu^2 / sig2, mu / sig2);
+      // Note: Should probably assume that infected are observed with some delay ...
+      deltaIobs[t-1] ~ neg_binomial_2(pobs * deltaI[t], deltaobs);
+    }
+  }
+}
+```

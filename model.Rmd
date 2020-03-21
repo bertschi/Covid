@@ -557,80 +557,66 @@ Model following [Li et al.](https://journals.sagepub.com/doi/10.1177/09622802177
 
 ```{stan output.var="model_stoch"}
 // Stochastic model with continuous latent variable
+functions {
+  real gamma_2_lpdf(real x, real n, real p, real delta) {
+    // Gamma distribution matching mean and variance of overdispersed binomial
+    real mu   = n * p;
+    real sig2 = n * p * (1 - p) * delta;
+    return gamma_lpdf(x | mu^2 / sig2, mu / sig2);
+  }
+
+  real w_tau(int tau, real mu, real sigma) {
+    return exp(normal_lpdf(tau | mu, sigma));
+  }
+}
 data {
-  int<lower=0> T;        // number of observations
-  int<lower=0> cases[T]; // observed number of cases (cumulative total)
-  int<lower=1> N;        // population size
-  int<lower=1> tau_max;  // maximum window length into past
+  int<lower=0> T;            // number of observations
+  int<lower=0> deltaIobs[T]; // observed new daily cases
+  int<lower=1> N;            // population size
+  int<lower=1> tau_max;      // maximum window length into past
 }
 parameters {
   real<lower=0> beta;
-  // Is tauE actually identifiable?
-  // real<lower=0, upper=tau_max> tauE;
-  // real<lower=0> tempE;
-  // real<lower=tauE, upper=tau_max> tauI;
-  real<lower=0, upper=tau_max> tauI;
-  real<lower=0> tempI;
-  real<lower=0, upper=1> pobs; // Currently not used ...
+  real<lower=0, upper=tau_max> tauMu;
+  real<lower=0> tauSigma;
+  // real<lower=0, upper=1> pobs; // Currently not used
   real<lower=0> delta;     // Over- or underdispersion of gamma distribution
   real<lower=0> deltaobs;
-  real<lower=0> deltaI[T]; // latent number of new cases per day
+  real<lower=0> deltaI[T+1]; // latent number of new cases per day
 }
 model {
   beta ~ normal(0, 1);
-  // tauE ~ normal(3, 2);
-  // tempE ~ normal(0, 1);
-  tauI ~ normal(3 + 5, 2);
-  tempI ~ normal(0, 1);  
-  pobs ~ beta(10, 10);
+  tauSigma ~ normal(4, 2);
+  // pobs ~ beta(10, 10);
   delta ~ normal(0, 10);
   deltaobs ~ normal(0, 10);
   
-  for (t in 1:(T-1)) {
-    real S = N - sum(deltaI[1:(t-1)]);
-    real E; real I; real R;
+  for (t in 1:T) {
+    real S = N - sum(deltaI[1:t]);
+    real I;
 
-    E = 0;
-    // for (tau in 1:(t+tau_max-1)) {
-    //   real w_tau = (1 - inv_logit((tau - tauE) / tempE));
-    //   if (t - tau > 0)
-	// E += w_tau * deltaI[t - tau];
-    //   else
-	// E += w_tau * deltaI[1];
-    // }
-
-    I = - E;
-    for (tau in 1:(t+tau_max-1)) {
-      real w_tau = (1 - inv_logit((tau - tauI) / tempI));
+    I = 0;
+    for (tau in 0:tau_max) {
       if (t - tau > 0)
-        I += w_tau * deltaI[t - tau];
+        I += w_tau(tau, tauMu, tauSigma) * deltaI[t - tau];
       else
-	I += w_tau * deltaI[1];
+	I += w_tau(tau, tauMu, tauSigma) * deltaI[1];
     }
-    
-    R = N - (S + E + I);
+    // Note: R = N - (S + E + I);
 
-    // Want to match beta-binomial with mean S * beta * I / N and overdispersion delta
     {
       real p = 1 - exp(- beta * I / N);  // Explanation of formula above
-      real mu = S * p;
-      real sig2 = S * p * (1 - p) * delta;
-      deltaI[t+1] ~ gamma(mu^2 / sig2, mu / sig2);
-
-      // Note: Should probably assume that infected are observed with some delay ...
-      // cases[t+1] - cases[t] ~ neg_binomial_2(pobs * deltaI[t+1], deltaobs);
-      // Try this ...
-      {
-	// Subtract cases already observed in infection window
-	real Iobs = I;
-	for (tau in 1:(t-1)) {
-	  real w_tau = (1 - inv_logit((tau - tauI) / tempI));
-	  Iobs -= w_tau * cases[t - tau];
-	}
-	if (Iobs < 0)
-	  Iobs = 0;
-	cases[t+1] - cases[t] ~ neg_binomial_2((1 - exp(- pobs)) * Iobs, deltaobs);
-      }
+      // Subtract cases already observed in infection window
+      real Iobs = I;
+      // for (tau in 1:(t-1)) {
+      //   real w_tau = (1 - inv_logit((tau - tauI) / tempI));
+      //   Iobs -= w_tau * deltaIobs[t - tau];
+      // }
+      // if (Iobs < 1e-6)
+      //   Iobs = 1e-6;
+      
+      deltaI[t+1] ~ gamma_2(S, p, delta);     
+      deltaIobs[t] ~ neg_binomial_2((1 - exp(- 0.5)) * Iobs, deltaobs);
     }
   }
 }

@@ -568,20 +568,28 @@ functions {
   real w_tau(int tau, real mu, real sigma) {
     return exp(normal_lpdf(tau | mu, sigma));
   }
+
+  real beta_switch(int t, real beta_before, real beta_after, real tau, real temp) {
+    return beta_before + (beta_after - beta_before) * (tanh((t - tau) / temp) + 1) / 2;
+  }
 }
 data {
   int<lower=0> T;            // number of observations
   int<lower=0> deltaIobs[T]; // observed new daily cases
+  int<lower=0> deltaCobs[T]; // observed daily casualities
   int<lower=1> N;            // population size
   int<lower=1> tau_max;      // maximum window length into past
+  int<lower=0> T_pred;
 }
 parameters {
   real<lower=0> beta;
   real<lower=0, upper=tau_max> tauMu;
-  real<lower=0> tauSigma;
+  real<lower=1> tauSigma;
   // real<lower=0, upper=1> pobs; // Currently not used
+  real<lower=0, upper=1> pdie;
   real<lower=0> delta;     // Over- or underdispersion of gamma distribution
-  real<lower=0> deltaobs;
+  real<lower=0> dispIobs;
+  real<lower=0> dispCobs;
   real<lower=0> deltaI[T+1]; // latent number of new cases per day
 }
 model {
@@ -589,7 +597,8 @@ model {
   tauSigma ~ normal(4, 2);
   // pobs ~ beta(10, 10);
   delta ~ normal(0, 10);
-  deltaobs ~ normal(0, 10);
+  dispIobs ~ normal(0, 10);
+  dispCobs ~ normal(0, 10);
   
   for (t in 1:T) {
     real S = N - sum(deltaI[1:t]);
@@ -616,8 +625,92 @@ model {
       //   Iobs = 1e-6;
       
       deltaI[t+1] ~ gamma_2(S, p, delta);     
-      deltaIobs[t] ~ neg_binomial_2((1 - exp(- 0.5)) * Iobs, deltaobs);
+      deltaIobs[t] ~ neg_binomial_2((1 - exp(- 0.5)) * Iobs, dispIobs);
+      deltaCobs[t] ~ neg_binomial_2((1 - exp(- pdie)) * Iobs, dispCobs);
     }
   }
 }
+generated quantities {
+  real R0;
+  real deltaIpred[T + T_pred + 1];
+  real deltaIobs_pred[T + T_pred];
+  real deltaCobs_pred[T + T_pred];
+  real log_lik[T];
+  
+  {
+    real tmp = 0;
+    for (tau in 0:tau_max)
+      tmp += w_tau(tau, tauMu, tauSigma);
+    R0 = beta * tmp;
+  }
+
+  deltaIpred[1] = deltaI[1];
+  for (t in 1:(T + T_pred)) {
+    real S = N - sum(deltaIpred[1:t]);
+    real I;
+      
+    I = 0;
+    for (tau in 0:tau_max) {
+      if (t - tau > 0)
+	I += w_tau(tau, tauMu, tauSigma) * deltaIpred[t - tau];
+      else
+	I += w_tau(tau, tauMu, tauSigma) * deltaIpred[1];
+    }
+      
+    if (t > T) {
+      real p = 1 - exp(- beta * I / N);
+      real mu = S * p;
+      real sig2 = S * p * (1 - p) * delta;
+      deltaIpred[t+1] = gamma_rng(mu^2 / sig2, mu / sig2);
+    } else {
+      deltaIpred[t+1] = deltaI[t+1];
+    }
+    deltaIobs_pred[t] = neg_binomial_2_rng((1 - exp(- 0.5)) * I, dispIobs);
+    deltaCobs_pred[t] = neg_binomial_2_rng((1 - exp(- pdie)) * I, dispCobs);
+    if (t <= T)
+      log_lik[t] = neg_binomial_2_lpmf(deltaIobs[t] | (1 - exp(- 0.5)) * I, dispIobs)
+	+ neg_binomial_2_lpmf(deltaCobs[t] | (1 - exp(- pdie)) * I, dispCobs);
+  }
+}
+```
+
+Fit model and show predictions
+
+```{r}
+## Test model on German data
+data <- df %>%
+    filter(`Country/Region` == "Germany") %>%
+    arrange(Date) %>%
+    mutate(DeltaI = Cases - lag(Cases),
+           DeltaC = Deaths - lag(Deaths)) %>%
+    select(Date, DeltaI, DeltaC) %>%
+    drop_na()
+
+fit_stoch <- sampling(model_stoch,
+                      data = list(T = nrow(DeltaI),
+                                  deltaIobs = data$DeltaI,
+                                  deltaCobs = data$DeltaC,
+                                  tau_max = 25,
+                                  N = 80000000,
+                                  T_pred = 30),
+                      chains = 2)
+
+traceplot(fit_stoch)
+```
+
+```{r}
+library(tidybayes)
+
+gather_draws(fit_stoch,
+             deltaIobs_pred[t],
+             deltaCobs_pred[t]) %>%
+    group_by(.chain, .iteration, .draw, .variable) %>%
+    arrange(t) %>%
+    mutate(total = cumsum(.value)) %>%
+    ungroup() %>%
+    ggplot(aes(factor(t), total,
+               color = .variable)) +
+    geom_tufteboxplot() +
+    theme_tufte() +
+    scale_y_log10()
 ```

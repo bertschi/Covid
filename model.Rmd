@@ -533,50 +533,104 @@ TODO:
   Which parameters are country specific and which apply everywhere,
   i.e. are disease specific?
 
+Model following [Li et al.](https://journals.sagepub.com/doi/10.1177/0962280217747054).
+
+* Now, I understand the 1 - exp(- x) probability. Consider the
+  probability that a susceptible individual is infected from $\tau$
+  time steps back, i.e. $\beta w_{\tau} I_{t-\tau}$. Then, no
+  infection from any previous time occurs with probability
+  $\prod_{\tau} (1 - \beta w_{\tau} I_{t-\tau})$. Assuming that $\beta
+  w_{\tau} I_{t-\tau} \ll 1$ we can approximate this product via
+  $$
+  \begin{align*}
+	  \ln \prod_{\tau} (1 - \beta w_{\tau} I_{t-\tau})
+	  &= \sum_{\tau} \ln (1 - \beta w_{\tau} I_{t-\tau}) \\
+	  &\approx - \sum_{\tau} \beta w_{\tau} I_{t-\tau}
+  \end{align*}
+  $$
+
+  Thus, the probability that a new infection results from some
+  previous time is
+  $$
+	  1 - e^{- \sum_{\tau} \beta w_{\tau} I_{t-\tau}}
+  $$
+
 ```{stan output.var="model_stoch"}
 // Stochastic model with continuous latent variable
 data {
-  int<lower=0> T;            // number of observations
-  int<lower=0> deltaIobs[T]; // observed number of new cases per day
-  int<lower=1> N;            // population size
+  int<lower=0> T;        // number of observations
+  int<lower=0> cases[T]; // observed number of cases (cumulative total)
+  int<lower=1> N;        // population size
+  int<lower=1> tau_max;  // maximum window length into past
 }
 parameters {
   real<lower=0> beta;
-  real<lower=0> tauE;
-  real<lower=tauE> tauI;
-  real<lower=0, upper=1> pobs;
-  real<lower=1> delta;
+  // Is tauE actually identifiable?
+  // real<lower=0, upper=tau_max> tauE;
+  // real<lower=0> tempE;
+  // real<lower=tauE, upper=tau_max> tauI;
+  real<lower=0, upper=tau_max> tauI;
+  real<lower=0> tempI;
+  real<lower=0, upper=1> pobs; // Currently not used ...
+  real<lower=0> delta;     // Over- or underdispersion of gamma distribution
   real<lower=0> deltaobs;
-  real<lower=0> deltaI[T+1]; // latent number of new cases per day
+  real<lower=0> deltaI[T]; // latent number of new cases per day
 }
 model {
   beta ~ normal(0, 1);
-  tauE ~ normal(3, 2);
+  // tauE ~ normal(3, 2);
+  // tempE ~ normal(0, 1);
   tauI ~ normal(3 + 5, 2);
+  tempI ~ normal(0, 1);  
   pobs ~ beta(10, 10);
+  delta ~ normal(0, 10);
+  deltaobs ~ normal(0, 10);
   
-  for (t in 2:(T+1)) {
+  for (t in 1:(T-1)) {
     real S = N - sum(deltaI[1:(t-1)]);
     real E; real I; real R;
 
     E = 0;
-    for (tau in 1:(t-1))
-      E += (1 - inv_logit(8 * (tau - tauE))) * deltaI[t - tau];
+    // for (tau in 1:(t+tau_max-1)) {
+    //   real w_tau = (1 - inv_logit((tau - tauE) / tempE));
+    //   if (t - tau > 0)
+	// E += w_tau * deltaI[t - tau];
+    //   else
+	// E += w_tau * deltaI[1];
+    // }
 
     I = - E;
-    for (tau in 1:(t-1))
-      I += (1 - inv_logit(8 * (tau - tauI))) * deltaI[t - tau];
-
+    for (tau in 1:(t+tau_max-1)) {
+      real w_tau = (1 - inv_logit((tau - tauI) / tempI));
+      if (t - tau > 0)
+        I += w_tau * deltaI[t - tau];
+      else
+	I += w_tau * deltaI[1];
+    }
+    
     R = N - (S + E + I);
 
     // Want to match beta-binomial with mean S * beta * I / N and overdispersion delta
     {
-      real p = beta * I / N;
+      real p = 1 - exp(- beta * I / N);  // Explanation of formula above
       real mu = S * p;
       real sig2 = S * p * (1 - p) * delta;
-      deltaI[t] ~ gamma(mu^2 / sig2, mu / sig2);
+      deltaI[t+1] ~ gamma(mu^2 / sig2, mu / sig2);
+
       // Note: Should probably assume that infected are observed with some delay ...
-      deltaIobs[t-1] ~ neg_binomial_2(pobs * deltaI[t], deltaobs);
+      // cases[t+1] - cases[t] ~ neg_binomial_2(pobs * deltaI[t+1], deltaobs);
+      // Try this ...
+      {
+	// Subtract cases already observed in infection window
+	real Iobs = I;
+	for (tau in 1:(t-1)) {
+	  real w_tau = (1 - inv_logit((tau - tauI) / tempI));
+	  Iobs -= w_tau * cases[t - tau];
+	}
+	if (Iobs < 0)
+	  Iobs = 0;
+	cases[t+1] - cases[t] ~ neg_binomial_2((1 - exp(- pobs)) * Iobs, deltaobs);
+      }
     }
   }
 }

@@ -14,16 +14,21 @@ functions {
   }
 }
 data {
-  int<lower=0> T;
-  int<lower=0>  infected[T];
-  real<lower=0> times[T]; // observation times
-  int<lower=1> N; // population size
+  int<lower=0> T;           // number/days of observations
+  int<lower=0> infected[T]; // daily new infection counts
+  int<lower=1> N;           // population size
+  int<lower=0> T_pred;      // number of desired predictions
 }
 transformed data {
+  // Parameters passed to ODE solver
   real x_r[0];
   int  x_i[1];
+  // observation times
+  real times[T];
   
   x_i[1] = N;
+  for (t in 1:T)
+    times[t] = t;
 }
 parameters {
   // SEIR parameters
@@ -43,7 +48,7 @@ transformed parameters {
   theta[1] = beta; theta[2] = a; theta[3] = gamma;
   // Integrate ODE system
   x0[1] = N - xini[1];
-  x = integrate_ode_rk45(seir, x0, -0.1, times, theta, x_r, x_i);
+  x = integrate_ode_rk45(seir, x0, 0.0, times, theta, x_r, x_i);
 }
 model {
   // Priors
@@ -57,7 +62,18 @@ model {
 }
 generated quantities {
   real log_lik[T];
+  real times_pred[T + T_pred];
+  real x_pred[T + T_pred, 4];
+  int infected_pred[T + T_pred];
 
   for (t in 1:T)
     log_lik[t] = neg_binomial_2_lpmf(infected[t] | x[t, 3], phi);
+
+  // Generate predictions
+  for (t in 1:(T + T_pred))
+    times_pred[t] = t;
+  
+  x_pred = integrate_ode_rk45(seir, x0, 0.0, times_pred, theta, x_r, x_i);
+  for (t in 1:(T + T_pred))
+    infected_pred[t] = neg_binomial_2_rng(x[t, 3], phi);
 }

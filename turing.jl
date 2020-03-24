@@ -47,10 +47,14 @@ end
     θ = SEIRModel(0.0, 0.0, beta, a, gamma)
     tspan = (0.0, length(infected))
     ode = ODEProblem(seirdynamics!, u₀, tspan, θ)
-    sol = solve(ode)
+    sol = solve(ode, RK4())
     infected_hat = map(u -> u[3], sol(1:length(infected)).u)
 
-    for i = 1:length(infected)
-        infected[i] ~ NegBinom2(infected_hat[i], phi)
+    try
+        for i = 1:length(infected)
+            infected[i] ~ NegBinom2(infected_hat[i], phi)
+        end
+    catch
+        Inf
     end
 end

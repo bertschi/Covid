@@ -58,3 +58,17 @@ end
         Inf
     end
 end
+
+function demo()
+    θ = SEIRModel(0, 0, 0.5, 1/3, 0.2)
+    N = 1e6
+
+    ode = ODEProblem(seirdynamics!, [N - 1, 0, 1, 0], (0, 100.0), θ)
+    sim = solve(ode, RK4())
+
+    μ = map(u -> u[3], sim(1:100).u)
+    data = map(rand, NegBinom2.(μ, 10.0))
+
+    model = seir(data, N)
+    sample(model, NUTS(400, 0.65), 800)
+end

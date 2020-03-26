@@ -12,6 +12,8 @@ options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 
 sp500_opts <- getOptionChain("^GSPC", NULL)
+sp500 <- getQuote("^GSPC") %>%
+    as_tibble()
 
 df_opts <-
     bind_rows(
@@ -113,16 +115,28 @@ generated quantities {
 
 model <- stan_model(model_code = code)
 
+spot <- sp500 %>%
+    mutate(Date = date(`Trade Time`),
+           Spot = Last) %>%
+    select(Date, Spot)
+
+delta <- 0.025
 data <- df_opts %>%
-    mutate(Price = (Ask + Bid) / 2,
-           Maturity = Expiration - today()) %>%
-    filter(OI > 100 & Vol > 100)
+    mutate(Date = spot$Date,
+           Spot = spot$Spot,
+           Price = (Ask + Bid) / 2,
+           Maturity = Expiration - Date) %>%
+    ## select out of the money options that are traded
+    filter(Bid > 0) %>%
+    filter(ifelse(Type == "Call",
+                  (1 - delta) * Spot <= Strike,
+                  (1 + delta) * Spot >= Strike))
 
 r <- 0.0
 
 fits <- data %>%
     crossing(K = 1:3) %>%
-    group_by(Expiration, Maturity, K) %>%
+    group_by(Expiration, Maturity, K, Date, Spot) %>%
     nest() %>%
     mutate(fits = pmap(list(data, Maturity, K),
                       function (data, tau, K)
@@ -160,19 +174,15 @@ fits %>%
 ggsave("reports/model_loo.pdf")
 
 ## Compute spot price from put-call parity
-spots <- data %>%
-    select(Expiration, Strike, Type, Price, Maturity) %>%
-    group_by(Expiration) %>%
-    spread(Type, Price) %>%
-    drop_na() %>%
-    mutate(Spot = Call - Put + exp(- r * as.numeric(Maturity)) * Strike) %>%
-    ungroup()
+## spots <- data %>%
+##     select(Expiration, Strike, Type, Price, Maturity) %>%
+##     group_by(Expiration) %>%
+##     spread(Type, Price) %>%
+##     drop_na() %>%
+##     mutate(Spot = Call - Put + exp(- r * as.numeric(Maturity)) * Strike) %>%
+##     ungroup()
 
 pdfs <- fits %>%
-    left_join(spots %>%
-              group_by(Expiration) %>%
-              summarize(Spot = median(Spot)) %>%
-              ungroup()) %>%
     mutate(pdfs = pmap(list(fits, Spot, Maturity),
                       function (fit, spot, tau) {
                           fit %>%

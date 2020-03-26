@@ -1,8 +1,8 @@
 // Simple hierarchical growth model
 functions {
   real growth(real t, vector theta) {
-    // Start with logistic function
-    return theta[1] / (1 + exp(- (t - theta[2]) / theta[3]));
+    // Simple logistic function
+    return theta[1] * 1 / (1 + exp(- (t - theta[2]) / theta[3]));
   }
 }
 data {
@@ -21,8 +21,13 @@ parameters {
 model {
   // Priors
   for (c in 1:C) {
-    theta[c] ~ student_t(3, 0, 5);
-    // p_obs and p_death uniform
+    theta[c] ~ student_t(3, 0, 1);
+    // p_obs uniform
+    {
+      real mu = 0.01;
+      real nu = 10;
+      p_death ~ beta(mu * nu, (1 - mu) * nu);
+    }
     tau_death[c] ~ normal(0, 10);
     phi[c] ~ normal(0, 10);
   }

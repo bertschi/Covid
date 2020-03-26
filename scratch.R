@@ -156,7 +156,7 @@ df_wiki %>%
     ggplot(aes(RelDay, Val,
                color = `Country/Region`,
                linetype = Series)) +
-    geom_line() +
+    geom_line(size = 1.5) +
     scale_y_log10() +
     scale_color_viridis_d() +
     facet_grid(Type ~ .,

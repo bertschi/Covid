@@ -2,7 +2,7 @@
 functions {
   real growth(real t, vector theta) {
     // Simple logistic function
-    return theta[1] * 1 / (1 + exp(- (t - theta[2]) / theta[3]));
+    return theta[1] * 1 / (1 + exp(- (t - theta[2]) / theta[3])) + theta[4];
   }
 }
 data {
@@ -12,7 +12,7 @@ data {
   int<lower=0> deaths[C, T];
 }
 parameters {
-  vector<lower=0>[3] theta[C];     // Country specific growth parameters
+  vector<lower=0>[4] theta[C];     // Country specific growth parameters
   real<lower=0, upper=1> p_obs[C]; // Country specific observation prevalence
   real<lower=0> tau_obs[C];        // Delay until infection can be identified
   real<lower=0, upper=1> p_death;  // Global death probability

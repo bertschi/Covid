@@ -162,7 +162,7 @@ fits %>%
     facet_grid(Expiration ~ .) +
     scale_fill_colorblind() +
     theme_tufte() +
-    theme(text = element_text(size = 12),
+    theme(text = element_text(size = 16),
           legend.position = "top") +
     labs(x = "LOO log likelihood",
          y = NULL,

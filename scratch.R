@@ -28,12 +28,31 @@ df <- df_cases %>%
 ## Plot like in Wikipedia https://de.wikipedia.org/wiki/COVID-19-Pandemie_in_Deutschland#/media/Datei:Coronavirus_deaths.png
 
 df_wiki <- df %>%
-    filter(`Country/Region` %in% c("China", "Italy", "Germany", "US", "France", "Spain", "UK", "Iran", "Korea, South", "Austria", "Sweden", "Japan")) %>%
+    ## filter(`Country/Region` %in% c("China", "Italy", "Germany", "US", "France", "Spain", "UK", "Iran", "Korea, South", "Austria", "Sweden", "Japan")) %>%
+    filter(`Country/Region` %in% c("China", "Italy", "Germany", "US", "France", "Spain", "UK", "Korea, South", "Austria", "Sweden", "Japan"))
     gather(Series, Value,
            Cases, Deaths) %>%
     group_by(`Country/Region`, Date, Series) %>%
     summarize(Value = sum(Value)) %>%
     ungroup()
+
+## First plot of data
+basic_theme <- theme(text = element_text(size = 12),
+                     panel.grid.major = element_line(colour = "grey"),
+                     legend.position = "top")
+
+df_wiki %>%
+    ggplot(aes(Date, Value,
+               color = Series)) +
+    geom_line() +
+    theme_tufte() +
+    basic_theme +
+    facet_wrap(~ `Country/Region`) +
+    scale_color_colorblind() +
+    scale_y_log10() +
+    labs(x = "Date", y = "Count")
+
+ggsave("reports/figs/raw_data.pdf")
 
 day_from_thresh <- function(date, val, thresh) {
     thresh_date <- date[which(val > thresh)[1]]
@@ -108,7 +127,7 @@ df_wiki %>%
                as.numeric(day_from_thresh(Date, Deaths,
                                           ifelse(unique(Type) == "Value",
                                                  10,
-                                                 1e-2)))) %>%
+                                                 0.1)))) %>%
     ungroup() %>%
     gather(Series, Valu,
            Cases, Deaths) %>%
@@ -138,7 +157,7 @@ df_wiki %>%
               filter(Year == max(Year)) %>%
               rename(Population = Value)) %>%
     ## Compute relative value (per 100 000)
-    mutate(RelValue = Value / Population * 1e5) %>%
+    mutate(RelValue = Value / Population) %>%
     gather(Type, Val,
            Value, RelValue) %>%
     ## Adjust relative date to deaths (absolute and relative)
@@ -149,19 +168,23 @@ df_wiki %>%
                as.numeric(day_from_thresh(Date, Deaths,
                                           ifelse(unique(Type) == "Value",
                                                  10,
-                                                 1e-2)))) %>%
+                                                 1e-6)))) %>%
     ungroup() %>%
     gather(Series, Val,
            Cases, Deaths) %>%
     ggplot(aes(RelDay, Val,
-               color = `Country/Region`,
-               linetype = Series)) +
-    geom_line(size = 1.5) +
+               color = `Country/Region`)) +
+    geom_line(size = 1.2) +
     scale_y_log10() +
-    scale_color_viridis_d() +
-    facet_grid(Type ~ .,
+    scale_color_brewer(palette = "Paired") +
+    facet_grid(Type ~ Series,
                scales = "free") +
-    theme_tufte()
+    theme_tufte() +
+    basic_theme +
+    labs(x = "Relative days",
+         y = "Count/Fraction")
+
+ggsave("reports/figs/align_data.pdf")
 
 ## Try simple logistic growth model
 
@@ -182,4 +205,97 @@ deaths <- df_wiki %>%
 
 fit <- sampling(model,
                 data = list(T = nrow(cases), C = ncol(cases), cases = t(cases), deaths = t(deaths)),
-                chains = 2)
+                chains = 2,
+                control = list(adapt_delta = 0.95),
+                seed = 123)
+
+## Investigate parameters
+mcmc_intervals(fit, "p_death")
+
+gather_draws(fit, p_obs[c]) %>%
+    left_join(tibble(country = colnames(cases)) %>%
+              mutate(c = 1:n())) %>%
+    ggplot(aes(country, .value)) +
+    geom_tufteboxplot() +
+    theme_tufte()
+
+gather_draws(fit, tau_die[c]) %>%
+    left_join(tibble(country = colnames(cases)) %>%
+              mutate(c = 1:n())) %>%
+    ggplot(aes(country, .value)) +
+    geom_tufteboxplot() +
+    theme_tufte() +
+    basic_theme +
+    labs(x = "Country",
+         y = "Delay [days]")
+
+ggsave("reports/figs/tau_die.pdf")
+
+spread_draws(fit, tau_obs[c], tau_die[c]) %>%
+    mutate(tau_total = tau_obs + tau_die) %>%
+    left_join(tibble(country = colnames(cases)) %>%
+              mutate(c = 1:n())) %>%
+    gather(.variable, .value,
+           starts_with("tau_")) %>%
+    ggplot(aes(country, .value)) +
+    geom_tufteboxplot() +
+    theme_tufte() +
+    facet_grid(.variable ~ .,
+               scales = "free")
+
+## Show model predictions
+df_plt <- crossing(`Country/Region` = colnames(cases),
+                   Date = distinct(df_wiki, Date)) %>%
+    group_by(Date) %>%
+    mutate(country = colnames(cases),
+           c = 1:n()) %>%
+    ungroup() %>%
+    group_by(`Country/Region`) %>%
+    arrange(Date) %>%
+    mutate(t = 1:n()) %>%
+    ungroup() %>%
+    left_join(df_wiki)
+
+plot_country <- function(fit, country_name) {
+    gather_draws(fit,
+                 hidden_pred[c, t],
+                 cases_pred[c, t],
+                 deaths_pred[c, t]) %>%
+        left_join(tibble(country = colnames(cases)) %>%
+                  mutate(c = 1:n())) %>%
+        group_by(country, t, .variable) %>%
+        filter(country == country_name) %>%
+        summarize(mean = mean(.value),
+                  q025 = quantile(.value, 0.025),
+                  q975 = quantile(.value, 0.975)) %>%
+        ungroup() %>%
+        ggplot(aes(t, mean)) +
+        geom_ribbon(aes(ymin = q025, ymax = q975),
+                    alpha = 0.4) +
+        geom_line(size = 1.2) +
+        theme_tufte() +
+        theme(text = element_text(size = 12),
+              panel.grid.major = element_line(colour = "grey"),
+              legend.position = "top") +
+        labs(x = "Days",
+             y = "Count",
+             title = country_name,
+             subtitle = "Model predictions") +
+        coord_cartesian(ylim = c(0.5, 2e5)) +
+        facet_grid(. ~ .variable,
+                   scales = "free") +
+        scale_y_log10() +
+        ## add actual data points
+        geom_point(aes(y = Value,
+                       color = Series),
+                   data = df_plt %>%
+                   filter(country == country_name)) +
+        scale_color_colorblind()
+}
+
+for (c in colnames(cases)) {
+    ggsave(paste0("reports/figs/model_pred_",
+                  filter(coding, `Country/Region` == c)$`Country Code`,
+                  ".pdf"),
+           plot = plot_country(fit, c))
+}

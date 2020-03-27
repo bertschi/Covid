@@ -29,7 +29,7 @@ df <- df_cases %>%
 
 df_wiki <- df %>%
     ## filter(`Country/Region` %in% c("China", "Italy", "Germany", "US", "France", "Spain", "UK", "Iran", "Korea, South", "Austria", "Sweden", "Japan")) %>%
-    filter(`Country/Region` %in% c("China", "Italy", "Germany", "US", "France", "Spain", "UK", "Korea, South", "Austria", "Sweden", "Japan"))
+    filter(`Country/Region` %in% c("China", "Italy", "Germany", "US", "France", "Spain", "UK", "Korea, South", "Austria", "Sweden", "Japan")) %>%
     gather(Series, Value,
            Cases, Deaths) %>%
     group_by(`Country/Region`, Date, Series) %>%
@@ -207,7 +207,9 @@ fit <- sampling(model,
                 data = list(T = nrow(cases), C = ncol(cases), cases = t(cases), deaths = t(deaths)),
                 chains = 2,
                 control = list(adapt_delta = 0.95),
-                seed = 123)
+                seed = 123,
+                sample_file = "tmp/sample.csv",
+                diagnostic_file = "tmp/diagnostic.csv")
 
 ## Investigate parameters
 mcmc_intervals(fit, "p_death")

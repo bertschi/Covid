@@ -21,15 +21,15 @@ parameters {
 }
 model {
   // Priors
+  {
+    real mu = 0.01;
+    real nu = 10;
+    p_death ~ beta(mu * nu, (1 - mu) * nu);
+  }
   for (c in 1:C) {
     theta[c] ~ student_t(3, 0, 1);
     // p_obs uniform
     tau_obs[c] ~ normal(0, 10);
-    {
-      real mu = 0.01;
-      real nu = 10;
-      p_death ~ beta(mu * nu, (1 - mu) * nu);
-    }
     tau_die[c] ~ normal(0, 10);
     phi[c] ~ normal(0, 10);
   }

@@ -10,9 +10,9 @@ options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 
 ## Download data ... should be done each day to retrieve new cases
-df_cases <- read_csv("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_confirmed_global.csv&filename=time_series_covid19_confirmed_global.csv")
-df_deaths <- read_csv("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_deaths_global.csv&filename=time_series_covid19_deaths_global.csv")
-## df_recovered <- read_csv("")
+df_cases <- read_csv("https://github.com/CSSEGISandData/COVID-19/raw/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+df_deaths <- read_csv("https://github.com/CSSEGISandData/COVID-19/raw/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+df_recovered <- read_csv("https://github.com/CSSEGISandData/COVID-19/raw/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv")
 
 df <- df_cases %>%
     gather(Date, Cases,
@@ -20,9 +20,9 @@ df <- df_cases %>%
     full_join(df_deaths %>%
               gather(Date, Deaths,
                      ends_with("/20"))) %>%
-    ## full_join(df_recovered %>%
-    ##           gather(Date, Recovered,
-    ##                  ends_with("/20"))) %>%
+    full_join(df_recovered %>%
+              gather(Date, Recovered,
+                     ends_with("/20"))) %>%
     mutate(Date = parse_date(Date, "%m/%d/%y"))
 
 ## Plot like in Wikipedia https://de.wikipedia.org/wiki/COVID-19-Pandemie_in_Deutschland#/media/Datei:Coronavirus_deaths.png
@@ -31,7 +31,7 @@ df_wiki <- df %>%
     ## filter(`Country/Region` %in% c("China", "Italy", "Germany", "US", "France", "Spain", "UK", "Iran", "Korea, South", "Austria", "Sweden", "Japan")) %>%
     filter(`Country/Region` %in% c("China", "Italy", "Germany", "US", "France", "Spain", "UK", "Korea, South", "Austria", "Sweden", "Japan")) %>%
     gather(Series, Value,
-           Cases, Deaths) %>%
+           Cases, Deaths, Recovered) %>%
     group_by(`Country/Region`, Date, Series) %>%
     summarize(Value = sum(Value)) %>%
     ungroup()
@@ -90,24 +90,6 @@ coding <- tribble(~ `Country/Region`, ~ `Country Code`,
                   "Austria", "AUT",
                   "Sweden", "SWE",
                   "Japan", "JPN")
-
-df_wiki %>%
-    left_join(coding) %>%
-    left_join(df_pop %>%
-              filter(Year == max(Year)) %>%
-              rename(Population = Value)) %>%
-    spread(Series, Value) %>%
-    mutate(DorR = Deaths + Recovered) %>%
-    gather(Series, Value,
-           Cases, Deaths, Recovered, DorR) %>%
-    mutate(RelValue = Value / Population) %>%
-    ggplot(aes(Date, RelValue,
-               color = Series)) +
-    geom_line() +
-    scale_color_colorblind() +
-    scale_y_log10() +
-    theme_tufte() +
-    facet_wrap(~ `Country Code`)
 
 df_wiki %>%
     ## Join with population size
@@ -265,8 +247,8 @@ plot_country <- function(fit, country_name) {
                  deaths_pred[c, t]) %>%
         left_join(tibble(country = colnames(cases)) %>%
                   mutate(c = 1:n())) %>%
-        group_by(country, t, .variable) %>%
         filter(country == country_name) %>%
+        group_by(country, t, .variable) %>%
         summarize(mean = mean(.value),
                   q025 = quantile(.value, 0.025),
                   q975 = quantile(.value, 0.975)) %>%
@@ -283,7 +265,7 @@ plot_country <- function(fit, country_name) {
              y = "Count",
              title = country_name,
              subtitle = "Model predictions") +
-        coord_cartesian(ylim = c(0.5, 2e5)) +
+        coord_cartesian(ylim = c(0.5, 4e5)) +
         facet_grid(. ~ .variable,
                    scales = "free") +
         scale_y_log10() +

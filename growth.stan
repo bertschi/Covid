@@ -2,7 +2,11 @@
 functions {
   real growth(real t, vector theta) {
     // Simple logistic function
-    return theta[1] * 1 / (1 + exp(- (t - theta[2]) / theta[3]));
+    // return theta[1] * 1 / (1 + exp(- (t - theta[2]) / theta[3]));
+    // Generalized logistic function
+    return theta[1] * (1 + exp(- (t - theta[2]) / (theta[3] * theta[4])))^(- theta[4]);
+    // Gompertz function
+    // return theta[1] * exp(- exp(- (t - theta[2]) / theta[3]));
   }
 }
 data {
@@ -12,7 +16,7 @@ data {
   int<lower=0> deaths[C, T];
 }
 parameters {
-  vector<lower=0>[3] theta[C];     // Country specific growth parameters
+  vector<lower=0>[4] theta[C];     // Country specific growth parameters
   real<lower=0, upper=1> p_obs[C]; // Country specific observation prevalence
   real<lower=0> tau_obs[C];        // Delay until infection can be identified
   real<lower=0, upper=1> p_death;  // Global death probability
@@ -20,17 +24,17 @@ parameters {
   real<lower=0> phi[C, 2];         // Observation noise overdispersion
 }
 model {
-  // Priors
+  // Priors (informed as far as possible)
   {
     real mu = 0.01;
     real nu = 10;
     p_death ~ beta(mu * nu, (1 - mu) * nu);
   }
+  // p_obs uniform
+  tau_obs ~ normal(12, 6);
+  tau_die ~ normal(8, 4);
   for (c in 1:C) {
     theta[c] ~ student_t(3, 0, 1);
-    // p_obs uniform
-    tau_obs[c] ~ normal(0, 10);
-    tau_die[c] ~ normal(0, 10);
     phi[c] ~ normal(0, 10);
   }
   // Likelihood

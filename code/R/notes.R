@@ -25,6 +25,8 @@ df <- df_cases %>%
                      ends_with("/20"))) %>%
     mutate(Date = parse_date(Date, "%m/%d/%y"))
 
+df <- read_csv("../../data/full_df_Mar_27.csv")
+
 ## Plot like in Wikipedia https://de.wikipedia.org/wiki/COVID-19-Pandemie_in_Deutschland#/media/Datei:Coronavirus_deaths.png
 
 df_wiki <- df %>%
@@ -52,7 +54,7 @@ df_wiki %>%
     scale_y_log10() +
     labs(x = "Date", y = "Count")
 
-ggsave("reports/figs/raw_data.pdf")
+ggsave("../../reports/figs/raw_data.pdf")
 
 day_from_thresh <- function(date, val, thresh) {
     thresh_date <- date[which(val > thresh)[1]]
@@ -75,7 +77,7 @@ df_wiki %>%
     facet_wrap(~ Series)
 
 ## Fetch country population sizes
-df_pop <- read_csv("population.csv")
+df_pop <- read_csv("../../data/population.csv")
 
 coding <- tribble(~ `Country/Region`, ~ `Country Code`,
                   "China", "CHN",
@@ -97,8 +99,8 @@ df_wiki %>%
     left_join(df_pop %>%
               filter(Year == max(Year)) %>%
               rename(Population = Value)) %>%
-    ## Compute relative value (per 100 000)
-    mutate(RelValue = Value / Population * 1e5) %>%
+    ## Compute relative value (per 1000 000)
+    mutate(RelValue = Value / Population) %>%
     gather(Type, Val,
            Value, RelValue) %>%
     ## Adjust relative date to deaths (absolute and relative)
@@ -109,7 +111,7 @@ df_wiki %>%
                as.numeric(day_from_thresh(Date, Deaths,
                                           ifelse(unique(Type) == "Value",
                                                  10,
-                                                 0.1)))) %>%
+                                                 1e-6)))) %>%
     ungroup() %>%
     gather(Series, Valu,
            Cases, Deaths) %>%
@@ -139,18 +141,21 @@ df_wiki %>%
               filter(Year == max(Year)) %>%
               rename(Population = Value)) %>%
     ## Compute relative value (per 100 000)
-    mutate(RelValue = Value / Population) %>%
+    mutate(Relative = Value / Population * 1e6) %>%
+    rename(Absolute = Value) %>%
     gather(Type, Val,
-           Value, RelValue) %>%
+           Absolute, Relative) %>%
+    left_join(tribble(~ Type, ~ Threshold,
+                      "Absolute", 10,
+                      "Absolute", 100,
+                      "Relative", 0.1,
+                      "Relative", 1)) %>%
     ## Adjust relative date to deaths (absolute and relative)
     spread(Series, Val) %>%
-    group_by(`Country/Region`, Type) %>%
+    group_by(`Country/Region`, Type, Threshold) %>%
     arrange(Date) %>%
     mutate(RelDay =
-               as.numeric(day_from_thresh(Date, Deaths,
-                                          ifelse(unique(Type) == "Value",
-                                                 10,
-                                                 1e-6)))) %>%
+               as.numeric(day_from_thresh(Date, Deaths, Threshold))) %>%
     ungroup() %>%
     gather(Series, Val,
            Cases, Deaths) %>%
@@ -159,18 +164,18 @@ df_wiki %>%
     geom_line(size = 1.2) +
     scale_y_log10() +
     scale_color_brewer(palette = "Paired") +
-    facet_grid(Type ~ Series,
+    facet_grid(Type + Threshold ~ Series,
                scales = "free") +
     theme_tufte() +
     basic_theme +
     labs(x = "Relative days",
          y = "Count/Fraction")
 
-ggsave("reports/figs/align_data.pdf")
+ggsave("../../reports/figs/align_data.pdf")
 
 ## Try simple logistic growth model
 
-model <- stan_model("growth.stan")
+model <- stan_model("../stan/growth.stan")
 
 cases <- df_wiki %>%
     filter(Series == "Cases") %>%
@@ -189,9 +194,9 @@ fit <- sampling(model,
                 data = list(T = nrow(cases), C = ncol(cases), cases = t(cases), deaths = t(deaths)),
                 chains = 2,
                 control = list(adapt_delta = 0.95),
-                seed = 123,
-                sample_file = "tmp/sample.csv",
-                diagnostic_file = "tmp/diagnostic.csv")
+                seed = 1234,
+                sample_file = "../../tmp/sample.csv",
+                diagnostic_file = "../../tmp/diagnostic.csv")
 
 ## Investigate parameters
 mcmc_intervals(fit, "p_death")
@@ -213,7 +218,7 @@ gather_draws(fit, tau_die[c]) %>%
     labs(x = "Country",
          y = "Delay [days]")
 
-ggsave("reports/figs/tau_die.pdf")
+ggsave("../../reports/figs/tau_die.pdf")
 
 spread_draws(fit, tau_obs[c], tau_die[c]) %>%
     mutate(tau_total = tau_obs + tau_die) %>%
@@ -238,7 +243,9 @@ df_plt <- crossing(`Country/Region` = colnames(cases),
     arrange(Date) %>%
     mutate(t = 1:n()) %>%
     ungroup() %>%
-    left_join(df_wiki)
+    left_join(df_wiki) %>%
+    ## Currently unused series
+    filter(Series != "Recovered")
 
 plot_country <- function(fit, country_name) {
     gather_draws(fit,
@@ -278,7 +285,7 @@ plot_country <- function(fit, country_name) {
 }
 
 for (c in colnames(cases)) {
-    ggsave(paste0("reports/figs/model_pred_",
+    ggsave(paste0("../../reports/figs/model_pred_",
                   filter(coding, `Country/Region` == c)$`Country Code`,
                   ".pdf"),
            plot = plot_country(fit, c))

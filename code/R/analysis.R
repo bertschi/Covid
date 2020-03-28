@@ -10,20 +10,22 @@ options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 
 ## Download data ... should be done each day to retrieve new cases
-df_cases <- read_csv("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_confirmed_global.csv&filename=time_series_covid19_confirmed_global.csv")
-df_deaths <- read_csv("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_deaths_global.csv&filename=time_series_covid19_deaths_global.csv")
-## df_recovered <- read_csv("")
+## df_cases <- read_csv("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_confirmed_global.csv&filename=time_series_covid19_confirmed_global.csv")
+## df_deaths <- read_csv("https://data.humdata.org/hxlproxy/api/data-preview.csv?url=https%3A%2F%2Fraw.githubusercontent.com%2FCSSEGISandData%2FCOVID-19%2Fmaster%2Fcsse_covid_19_data%2Fcsse_covid_19_time_series%2Ftime_series_covid19_deaths_global.csv&filename=time_series_covid19_deaths_global.csv")
+## ## df_recovered <- read_csv("")
 
-df <- df_cases %>%
-    gather(Date, Cases,
-           ends_with("/20")) %>%
-    full_join(df_deaths %>%
-              gather(Date, Deaths,
-                     ends_with("/20"))) %>%
-    ## full_join(df_recovered %>%
-    ##           gather(Date, Recovered,
-    ##                  ends_with("/20"))) %>%
-    mutate(Date = parse_date(Date, "%m/%d/%y"))
+## df <- df_cases %>%
+##     gather(Date, Cases,
+##            ends_with("/20")) %>%
+##     full_join(df_deaths %>%
+##               gather(Date, Deaths,
+##                      ends_with("/20"))) %>%
+##     ## full_join(df_recovered %>%
+##     ##           gather(Date, Recovered,
+##     ##                  ends_with("/20"))) %>%
+##     mutate(Date = parse_date(Date, "%m/%d/%y"))
+
+df <- read_csv("../../data/full_df_Mar_27.csv")
 
 ## Extract data for Germany
 data_ger <- df %>%
@@ -35,7 +37,7 @@ data_ger <- df %>%
     drop_na()
 
 ## Fit model
-model <- stan_model("stoch_change.stan")
+model <- stan_model("../stan/stoch_change.stan")
 data <- data_ger
 fit <- sampling(model,
                 data = list(T = nrow(data),

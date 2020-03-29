@@ -1,0 +1,312 @@
+---
+title: "COVID-19 modeling"
+author: "Nils Bertschinger"
+date: "28.03.2020"
+options:
+  doctype: md2html
+  out_path: ../../reports/sitr.html
+---
+
+```{julia}
+using Plots
+using DifferentialEquations
+using Distributions
+using Random
+using DataFrames
+using DataFramesMeta
+using CSV
+using Flux
+using ForwardDiff
+
+plotly()
+Random.seed!(123);
+```
+
+# Epidemic modeling
+## Towards explaining/estimating the delay effect
+
+### The SIR model
+
+The basic SIR model, assumes that an infection unfolds when
+susceptible (S) individuals become infected (I) -- which in turn
+infect further susceptible individuals. Finally, infected individuals
+recover (R) (or die) and are no longer susceptible. In continuous
+time, the dynamics can be described by the following system of
+ordinary differential equations (ODEs):
+
+$$
+\begin{align*}
+  \frac{dS}{dt} &= - \beta \frac{I_t}{N} S_t \\
+  \frac{dI}{dt} &= \beta \frac{I_t}{N} S_t - \gamma I_t \\
+  \frac{dR}{dt} &= \gamma I_t
+\end{align*}
+$$
+
+where $N \equiv S_t + I_t + R_t$ is constant over time. Model
+parameters are
+
+* the infectivity $\beta$
+* and the recovery rate $\gamma$.
+
+In this model, the average time of infection is $\gamma^{-1}$ giving
+rise to a *basic reproduction number* of $R_0 = \beta \gamma^{-1}$.
+
+Using the fantastic differential equation suite from Julia, the model
+is simulated as follows:
+
+```{julia}
+struct SIR
+    β::Float64
+    γ::Float64
+end
+
+function sirdxdt!(du, u, θ::SIR, t)
+    S, I, R = u
+    N = S + I + R
+    du[1] = - θ.β * I / N * S
+    du[2] = θ.β * I / N * S - θ.γ * I
+    du[3] = θ.γ * I
+end;
+```
+
+```{julia}
+function plotsol(dxdt, u₀, T, θ)
+    tspan = (0.0, T)
+    ode = ODEProblem(dxdt, u₀, tspan, θ)
+    sol = solve(ode, RK4())
+    plot(sol)
+end
+
+R₀ = 2.5
+τ = 5.0
+θ = SIR(R₀ / τ, 1 / τ)
+N = 1e6
+u₀ = [N - 1, 1, 0]
+T = 100
+plotsol(sirdxdt!, u₀, T, θ)
+```
+
+The basic SIR model corresponds to the assumption that infection
+durations are exponentially distributed. Obviously, this is a rather
+unrealistic assumption as most infections have a duration that is
+closely distributed around its mean value. Fortunately, Erlang/gamma
+distributed durations can be achieved by dividing the infected
+compartement into several sub-compartements.
+
+```{julia}
+struct ErlangSIR
+    β::Float64
+    γ::Float64
+    k::Int64
+end
+
+function erlangsirdxdt!(du, u, θ::ErlangSIR, t)
+    N = sum(u)
+    S = u[1]
+    I = sum(u[2:(end-1)])
+    du[1] = - θ.β * I / N * S
+    du[2] = θ.β * I / N * S - θ.k * θ.γ * u[2]
+    for i in 2:θ.k
+        du[i+1] = θ.k * θ.γ * u[i] - θ.k * θ.γ * u[i+1]
+    end
+    du[end] = θ.k * θ.γ * u[end-1]
+end;
+```
+
+```{julia}
+R₀ = 2.5
+τ = 5.0
+θ = ErlangSIR(R₀ / τ, 1 / τ, 4)
+N = 1e6
+u₀ = vcat(N - 1, 1, fill(0, θ.k - 1), 0)
+T = 100
+plotsol(erlangsirdxdt!, u₀, T, θ)
+```
+
+### The SITR model
+
+Following [Peng et al.](https://arxiv.org/abs/2002.06563) we extend
+the model in the following way:
+
+* Infected individuals either recover unnoticed or are tested positive
+  eventually.
+
+* Positively tested individuals either recover or die.
+
+In this fashion, the observed values are linked to the tested cases
+only. Furthermore, the model should allow for non-exponential
+distributions of stage durations in order to include delay effects. In
+particular, reported deaths only occur some time after individuals
+have been tested positively.
+
+Finally, we define the SITR model as
+
+$$
+\begin{align*}
+  \frac{dS}{dt} &= - \beta_I \frac{I_t}{N} S_t - \beta_T \frac{T_t}{N} S_t \\
+  \frac{dI^n}{dt} &= \beta_I \frac{I_t}{N} S_t + \beta_T \frac{T_t}{N} S_t - \gamma_{IR} I^n_t - \gamma_2 I^n_t \\
+  \frac{dR_1}{dt} &= \gamma_1 I^n_t \\
+  \frac{dT^m_t}{dt} &= \gamma_2 I^n_t - \gamma_3 T^m_t - \gamma_4 T^m_t \\
+  \frac{dD}{dt] &= \gamma_3 T^m_t \\
+  \frac{dR}{dt} &= \gamma_4 T^m_t
+\end{align*}
+$$
+
+where upper indices denote that the compartment is actually split into
+$n$ and $m$ sub-compartments with suitably rescaled parameters as in
+the Erlang-SIR model.
+
+```{julia}
+struct SITR
+    βI
+    βT
+    γI
+    ρR
+    γT
+    ρD
+end
+
+function sitrdxdt!(du, u, θ::SITR, t)
+    N = sum(u)
+    S, I, R₁, T, R₂, D = u
+
+    du[1] = - θ.βI * I / N * S - θ.βT * T / N * S
+    du[2] = θ.βI * I / N * S + θ.βT * T / N * S - θ.γI * I
+    du[3] = θ.ρR * θ.γI * I
+    du[4] = (1 - θ.ρR) * θ.γI * I - θ.γT * T
+    du[5] = (1 - θ.ρD) * θ.γT * T
+    du[6] = θ.ρD * θ.γT * T
+end;
+```
+
+```{julia}
+R₀ = 2.5
+τ = 5.0
+θ = SITR(R₀ / τ, R₀ / τ, 2 / τ, 0.0, 2 / τ, 0.1)
+N = 1e6
+u₀ = vcat(N - 1, 1, fill(0, 4))
+T = 100
+plotsol(sitrdxdt!, u₀, T, θ)
+```
+
+```{julia}
+## struct ErlangSITR
+##     βI::Float64
+##     βT::Float64
+##     n::Int64
+##     γII::Float64
+##     γIR::Float64
+##     γIT::Float64
+##     m::Int64
+##     γTT::Float64
+##     γTD::Float64
+##     γTR::Float64
+## end
+
+## function erlangsitrdxdt!(du, u, θ::ErlangSITR, t)
+##     N = sum(u)
+##     S = u[1]
+##     I = sum(u[1 .+ (1:θ.n)])
+##     T = sum(u[2 .+ θ.n .+ (1:θ.m)])
+    
+##     du[1] = - θ.βI * I / N * S - θ.βT * T / N * S
+    
+##     du[1 + 1] = (θ.βI * I / N * S + θ.βT * T / N * S 
+##                - θ.n * θ.γII * u[2] - θ.n * θ.γIR * u[2])
+##     for i in 2:(θ.n - 1)
+##         du[1 + i] = θ.n * θ.γII * u[i] - θ.n * θ.γII * u[1 + i] - θ.n * θ.γIR * u[1 + i]
+##     end
+##     du[1 + θ.n] = θ.n * θ.γII * u[θ.n] - θ.n * θ.γIT * u[1 + θ.n] - θ.n * θ.γIR * u[1 + θ.n]
+
+##     du[1 + θ.n + 1] = θ.n * θ.γIR * I
+    
+##     du[2 + θ.n + 1] = θ.n * θ.γIT * u[1 + θ.n] - θ.m * θ.γTT * u[3 + θ.n] - θ.m * θ.γTD * u[3 + θ.n] - θ.m * θ.γTD * u[3 + θ.n]
+##     for i in 2:θ.m
+##         du[2 + θ.n + i] = θ.m * θ.γTT * u[2 + θ.n + i - 1] - θ.m * θ.γTR * u[2 + θ.n + i] - θ.m * θ.γTD * u[2 + θ.n + i]
+##     end
+    
+##     du[end - 1] = θ.m * θ.γTD * T
+##     du[end] = θ.m * θ.γTR * T
+## end;
+```
+
+```{julia}
+# R₀ = 2.5
+# τ = 5.0
+# θ = ErlangSITR(R₀ / τ, 0, 4, 1 / τ, 0.1, 1 / τ, 4, 1 / τ, 0.01, 1 / τ)
+# N = 1e6
+# u₀ = vcat(N - 1, 1, fill(0, θ.n - 1), 0, fill(0, θ.m), 0, 0)
+# T = 100
+# plotsol(erlangsitrdxdt!, u₀, T, θ)
+```
+
+Try fitting with Flux
+
+```{julia}
+df = CSV.read("../../data/full_df_Mar_27.csv")
+rename!(df, Symbol("Country/Region") => :Country)
+
+df = @linq df |>
+         where(:Country .== "Germany") |>
+         transform(Cases  = parse.(Int64, :Cases),
+                   Deaths = parse.(Int64, :Deaths))
+```
+
+```{julia}
+function NegBinom2(μ, ϕ)
+    μ = max(zero(μ), μ)
+    NegativeBinomial(ϕ, ϕ / (μ + ϕ))
+end
+
+function modelsim(u₀, θ, ϕ, T)
+    tspan = (0.0, T - 1)
+    ode = ODEProblem(sitrdxdt!, u₀, tspan, θ)
+    solve(ode, RK4())
+end
+
+function loglik(cases, deaths, u₀, θ, ϕ)
+    T = length(cases)
+    sol = modelsim(u₀, θ, ϕ, T)
+    x = sol(0:(T - 1))
+
+    ll = 0.0
+    for t in 1:(T-1)
+        ll += logpdf(NegBinom2( (1 - θ.ρR) * θ.γI * x[2, t], ϕ.T ),
+                     cases[t + 1] - cases[t])
+        ll += logpdf(NegBinom2( θ.ρD * θ.γT * x[4, t], ϕ.D ),
+                     deaths[t + 1] - deaths[t])        
+    end
+    ll
+end
+```
+
+```{julia}
+function fitdemo(df, N)
+    params = vcat(log(N), rand(Normal(), 5 + 6 + 2))
+
+    function constrain(params)
+        u₀ = map(exp, params[1:6])
+        θ = map( (f, x) -> f(x),
+                 [exp, exp, exp, Flux.σ, exp, Flux.σ],
+                 params[7:12] )
+        ϕ = (T = exp(params[13]), D = exp(params[14]))
+        u₀, SITR(θ...), ϕ
+    end
+    function loss(params, cases, deaths)
+        u₀, θ, ϕ = constrain(params)
+        - loglik(cases, deaths, u₀, θ, ϕ)
+    end
+
+    cb = Flux.throttle(() -> (@show loss(params, df.Cases, df.Deaths)), 2)
+    opt = ADAM()
+    for n = 1:25000
+        cb()
+        if n % 100 == 0
+            @show n
+        end
+        Flux.Optimise.update!(opt, params,
+                              ForwardDiff.gradient(p -> loss(p, df.Cases, df.Deaths), params))
+    end
+    constrain(params)
+end
+```

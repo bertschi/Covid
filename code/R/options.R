@@ -85,6 +85,26 @@ data <- df_opts %>%
                   (1 - delta) * Spot <= Strike,
                   (1 + delta) * Spot >= Strike))
 
+
+## For comparison get some old data from RND package
+df_old <- read_csv("../../data/SP500_Options_Apr19_2013.csv")
+df_old <- df_old %>%
+    select(ends_with(".c"), strike) %>%
+    select(Bid = bid.c, Ask = ask.c, Vol = vol.c,
+           Strike = strike, OI = openint.c) %>%
+    mutate(Type = "Call") %>%
+    bind_rows(df_old %>%
+    select(ends_with(".p"), strike) %>%
+    select(Bid = bid.p, Ask = ask.p, Vol = vol.p,
+           Strike = strike, OI = openint.p) %>%
+    mutate(Type = "Put")) %>%
+    mutate(Date = parse_date("2013-04-19"),
+           Expiration =  Date + days(62),
+           Spot = 1555.25) %>%
+    mutate(Price = (Ask + Bid) / 2,
+           Maturity = Expiration - Date)
+
+
 data %>%
     ggplot(aes(Strike, Price,
                shape = factor(Expiration),

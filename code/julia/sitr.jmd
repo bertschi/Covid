@@ -167,8 +167,8 @@ struct SITR
 end
 
 function sitrdxdt!(du, u, θ::SITR, t)
-    N = sum(u)
-    S, I, R₁, T, R₂, D = u
+    N = sum(u[1:6])
+    S, I, R₁, T, R₂, D, Ttot = u
 
     du[1] = - θ.βI * I / N * S - θ.βT * T / N * S
     du[2] = θ.βI * I / N * S + θ.βT * T / N * S - θ.γI * I
@@ -176,6 +176,8 @@ function sitrdxdt!(du, u, θ::SITR, t)
     du[4] = (1 - θ.ρR) * θ.γI * I - θ.γT * T
     du[5] = (1 - θ.ρD) * θ.γT * T
     du[6] = θ.ρD * θ.γT * T
+    ## Bookkeeping of total tested
+    du[7] = (1 - θ.ρR) * θ.γI * I
 end;
 ```
 
@@ -184,7 +186,7 @@ R₀ = 2.5
 τ = 5.0
 θ = SITR(R₀ / τ, R₀ / τ, 2 / τ, 0.0, 2 / τ, 0.1)
 N = 1e6
-u₀ = vcat(N - 1, 1, fill(0, 4))
+u₀ = vcat(N - 1, 1, fill(0, 5))
 T = 100
 plotsol(sitrdxdt!, u₀, T, θ)
 ```
@@ -243,13 +245,15 @@ plotsol(sitrdxdt!, u₀, T, θ)
 Try fitting with Flux
 
 ```{julia}
-df = CSV.read("../../data/full_df_Mar_27.csv")
+df = CSV.read("../../data/full_df_Mar_27.csv";
+              missingstrings = ["NA"])
 rename!(df, Symbol("Country/Region") => :Country)
 
 df = @linq df |>
-         where(:Country .== "Germany") |>
-         transform(Cases  = parse.(Int64, :Cases),
-                   Deaths = parse.(Int64, :Deaths))
+       by([:Country, :Date],
+          Cases = sum(:Cases),
+          Deaths = sum(:Deaths),
+          Recovered = sum(:Recovered));
 ```
 
 ```{julia}
@@ -271,9 +275,9 @@ function loglik(cases, deaths, u₀, θ, ϕ)
 
     ll = 0.0
     for t in 1:(T-1)
-        ll += logpdf(NegBinom2( (1 - θ.ρR) * θ.γI * x[2, t], ϕ.T ),
+        ll += logpdf(NegBinom2( x[7, t + 1] - x[7, t], ϕ.T ),
                      cases[t + 1] - cases[t])
-        ll += logpdf(NegBinom2( θ.ρD * θ.γT * x[4, t], ϕ.D ),
+        ll += logpdf(NegBinom2( x[6, t + 1] - x[6, t], ϕ.D ),
                      deaths[t + 1] - deaths[t])        
     end
     ll
@@ -281,15 +285,18 @@ end
 ```
 
 ```{julia}
-function fitdemo(df, N)
-    params = vcat(log(N), rand(Normal(), 5 + 6 + 2))
+function fitdemo(df, N; opt = ADAM())
+    params = rand(Normal(), 5 + 6 + 2)
 
     function constrain(params)
-        u₀ = map(exp, params[1:6])
+        u₀ = vcat( Flux.σ(params[1]) * N,
+                   map(exp, params[2:5]),
+                   df.Deaths[1],
+                   df.Cases[1] )
         θ = map( (f, x) -> f(x),
                  [exp, exp, exp, Flux.σ, exp, Flux.σ],
-                 params[7:12] )
-        ϕ = (T = exp(params[13]), D = exp(params[14]))
+                 params[6:11] )
+        ϕ = (T = exp(params[12]), D = exp(params[13]))
         u₀, SITR(θ...), ϕ
     end
     function loss(params, cases, deaths)
@@ -298,7 +305,6 @@ function fitdemo(df, N)
     end
 
     cb = Flux.throttle(() -> (@show loss(params, df.Cases, df.Deaths)), 2)
-    opt = ADAM()
     for n = 1:25000
         cb()
         if n % 100 == 0
@@ -309,4 +315,34 @@ function fitdemo(df, N)
     end
     constrain(params)
 end
+```
+
+```{julia}
+pop = CSV.read("../../data/population.csv")
+rename!(pop,
+        Symbol("Country Name") => :Country,
+        Symbol("Country Code") => :Code)
+pop = @where(pop,
+             :Year .== maximum(:Year))
+
+plts = []
+for country in ["Italy", "Germany", "China"]
+    foo = @where(df, :Country .== country)
+    tada = fitdemo(foo, @where(pop, :Country .== country).Value;
+                   opt = RMSProp(1e-2))
+
+    ode = ODEProblem(sitrdxdt!, tada[1], (0., 100), tada[2])
+    sol = solve(ode, RK4())
+
+    println(country)
+    plt = plot(sol.t, log.(sol[7, :]))
+    plot!(plt, sol.t, log.(sol[6, :]))
+    plot!(plt, 1:nrow(foo), log.(foo.Cases);
+          seriestype = :scatter)
+    plot!(plt, 1:nrow(foo), log.(foo.Deaths);
+          seriestype = :scatter)
+    push!(plts, plt)
+end
+
+plot(plts...)
 ```

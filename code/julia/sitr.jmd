@@ -158,8 +158,8 @@ the Erlang-SIR model.
 
 ```{julia}
 struct SITR
-    βI
-    βT
+    βI::Function
+    βT::Function
     γI
     ρR
     γT
@@ -170,8 +170,10 @@ function sitrdxdt!(du, u, θ::SITR, t)
     N = sum(u[1:6])
     S, I, R₁, T, R₂, D, Ttot = u
 
-    du[1] = - θ.βI * I / N * S - θ.βT * T / N * S
-    du[2] = θ.βI * I / N * S + θ.βT * T / N * S - θ.γI * I
+    βI = θ.βI(t)
+    βT = θ.βT(t)
+    du[1] = - βI * I / N * S - βT * T / N * S
+    du[2] = βI * I / N * S + βT * T / N * S - θ.γI * I
     du[3] = θ.ρR * θ.γI * I
     du[4] = (1 - θ.ρR) * θ.γI * I - θ.γT * T
     du[5] = (1 - θ.ρD) * θ.γT * T
@@ -184,62 +186,11 @@ end;
 ```{julia}
 R₀ = 2.5
 τ = 5.0
-θ = SITR(R₀ / τ, R₀ / τ, 2 / τ, 0.0, 2 / τ, 0.1)
+θ = SITR(t -> R₀ / τ, t -> R₀ / τ, 2 / τ, 0.0, 2 / τ, 0.1)
 N = 1e6
 u₀ = vcat(N - 1, 1, fill(0, 5))
 T = 100
 plotsol(sitrdxdt!, u₀, T, θ)
-```
-
-```{julia}
-## struct ErlangSITR
-##     βI::Float64
-##     βT::Float64
-##     n::Int64
-##     γII::Float64
-##     γIR::Float64
-##     γIT::Float64
-##     m::Int64
-##     γTT::Float64
-##     γTD::Float64
-##     γTR::Float64
-## end
-
-## function erlangsitrdxdt!(du, u, θ::ErlangSITR, t)
-##     N = sum(u)
-##     S = u[1]
-##     I = sum(u[1 .+ (1:θ.n)])
-##     T = sum(u[2 .+ θ.n .+ (1:θ.m)])
-    
-##     du[1] = - θ.βI * I / N * S - θ.βT * T / N * S
-    
-##     du[1 + 1] = (θ.βI * I / N * S + θ.βT * T / N * S 
-##                - θ.n * θ.γII * u[2] - θ.n * θ.γIR * u[2])
-##     for i in 2:(θ.n - 1)
-##         du[1 + i] = θ.n * θ.γII * u[i] - θ.n * θ.γII * u[1 + i] - θ.n * θ.γIR * u[1 + i]
-##     end
-##     du[1 + θ.n] = θ.n * θ.γII * u[θ.n] - θ.n * θ.γIT * u[1 + θ.n] - θ.n * θ.γIR * u[1 + θ.n]
-
-##     du[1 + θ.n + 1] = θ.n * θ.γIR * I
-    
-##     du[2 + θ.n + 1] = θ.n * θ.γIT * u[1 + θ.n] - θ.m * θ.γTT * u[3 + θ.n] - θ.m * θ.γTD * u[3 + θ.n] - θ.m * θ.γTD * u[3 + θ.n]
-##     for i in 2:θ.m
-##         du[2 + θ.n + i] = θ.m * θ.γTT * u[2 + θ.n + i - 1] - θ.m * θ.γTR * u[2 + θ.n + i] - θ.m * θ.γTD * u[2 + θ.n + i]
-##     end
-    
-##     du[end - 1] = θ.m * θ.γTD * T
-##     du[end] = θ.m * θ.γTR * T
-## end;
-```
-
-```{julia}
-# R₀ = 2.5
-# τ = 5.0
-# θ = ErlangSITR(R₀ / τ, 0, 4, 1 / τ, 0.1, 1 / τ, 4, 1 / τ, 0.01, 1 / τ)
-# N = 1e6
-# u₀ = vcat(N - 1, 1, fill(0, θ.n - 1), 0, fill(0, θ.m), 0, 0)
-# T = 100
-# plotsol(erlangsitrdxdt!, u₀, T, θ)
 ```
 
 Try fitting with Flux
@@ -285,19 +236,29 @@ end
 ```
 
 ```{julia}
+function sigmoidal(x, low, high, β, τ)
+    low + (high - low) / (1 + exp(- β * (x - τ)))
+end
+
 function fitdemo(df, N; opt = ADAM())
-    params = rand(Normal(), 5 + 6 + 2)
+    ## Constrain some parameters, i.e. N is fixed and βT ≡ 0
+    ## Instead, we assume that βI changes over time
+    params = rand(Normal(), 4 + 8 + 2)
 
     function constrain(params)
-        u₀ = vcat( Flux.σ(params[1]) * N,
-                   map(exp, params[2:5]),
-                   df.Deaths[1],
-                   df.Cases[1] )
+        x = vcat(map(exp, params[1:4]),
+                 df.Deaths[1],
+                 df.Cases[1])
+        u₀ = vcat(N - sum(x), x)
+        βI(t) = sigmoidal(t,
+                          Flux.σ(params[5]), Flux.σ(params[6]),
+                          exp(params[7]), exp(params[8]))
+        βT(t) = 0.0
         θ = map( (f, x) -> f(x),
-                 [exp, exp, exp, Flux.σ, exp, Flux.σ],
-                 params[6:11] )
-        ϕ = (T = exp(params[12]), D = exp(params[13]))
-        u₀, SITR(θ...), ϕ
+                 [exp, Flux.σ, exp, Flux.σ],
+                 params[9:12] )
+        ϕ = (T = exp(params[13]), D = exp(params[14]))
+        u₀, SITR(βI, βT, θ...), ϕ
     end
     function loss(params, cases, deaths)
         u₀, θ, ϕ = constrain(params)
@@ -305,7 +266,7 @@ function fitdemo(df, N; opt = ADAM())
     end
 
     cb = Flux.throttle(() -> (@show loss(params, df.Cases, df.Deaths)), 2)
-    for n = 1:25000
+    for n = 1:12500
         cb()
         if n % 100 == 0
             @show n
@@ -328,8 +289,8 @@ pop = @where(pop,
 plts = []
 for country in ["Italy", "Germany", "China"]
     foo = @where(df, :Country .== country)
-    tada = fitdemo(foo, @where(pop, :Country .== country).Value;
-                   opt = RMSProp(1e-2))
+    tada = fitdemo(foo, @where(pop, :Country .== country).Value[1];
+                   opt = RMSProp(1e-3))
 
     ode = ODEProblem(sitrdxdt!, tada[1], (0., 100), tada[2])
     sol = solve(ode, RK4())

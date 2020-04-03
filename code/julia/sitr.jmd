@@ -307,3 +307,45 @@ end
 
 plot(plts...)
 ```
+
+Finally, we try a Turing wrapper for the model. This should enable a
+more complete investigation of estimation uncertainties.
+
+```{julia}
+using Turing
+
+@model sitrmodel(c1, d1, Δc, Δd, N) = begin
+    βI ~ truncated(Normal(0.0, 5.0), 0.0, Inf)
+    βT = 0.0
+    γI ~ truncated(Normal(0.0, 5.0), 0.0, Inf)
+    ρR ~ Beta(1.0, 1.0)
+    γT ~ truncated(Normal(0.0, 5.0), 0.0, Inf)
+    ρD ~ Beta(1.0, 1.0)
+
+    ϕT ~ truncated(Normal(0.0, 10.0), 0.0, Inf)
+    ϕD ~ truncated(Normal(0.0, 10.0), 0.0, Inf)
+
+    I ~ truncated(Cauchy(), 0.0, Inf)
+    R₁ ~ truncated(Cauchy(), 0.0, Inf)
+    T ~ truncated(Cauchy(), 0.0, Inf)
+    R₂ ~ truncated(Cauchy(), 0.0, Inf)
+
+    ## Compute likelihood
+    try
+        D = d1
+        Ttot = c1
+        u₀ = [N - (I + R₁ + T + R₂ + D - Ttot), I, R₁, T, R₂, D, Ttot]
+        θ = SITR(t -> βI, t -> βT, γI, ρR, γT, ρD)
+        ϕ = (T = ϕT, D = ϕD)
+        T = length(Δc) + 1
+        sol = modelsim(u₀, θ, ϕ, T)
+        x = sol(0:(T - 1))
+        for t in 1:(T - 1)
+            Δc[t] ~ NegBinom2( x[7, t + 1] - x[7, t], ϕ.T )
+            Δd[t] ~ NegBinom2( x[6, t + 1] - x[6, t], ϕ.D )
+        end
+    catch
+        Inf
+    end
+end
+```

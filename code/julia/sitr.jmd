@@ -17,6 +17,7 @@ using DataFramesMeta
 using CSV
 using Flux
 using ForwardDiff
+using Optim
 
 plotly()
 Random.seed!(123);
@@ -160,33 +161,32 @@ the Erlang-SIR model.
 struct SITR
     βI::Function
     βT::Function
-    γI
-    ρR
-    γT
+    γI₁
+    ρT
+    γI₂
     ρD
 end
 
 function sitrdxdt!(du, u, θ::SITR, t)
-    N = sum(u[1:6])
-    S, I, R₁, T, R₂, D, Ttot = u
+    N = sum(u)
+    S, I₁, I₂, T, R₁, R₂, D = u
 
     βI = θ.βI(t)
     βT = θ.βT(t)
-    du[1] = - βI * I / N * S - βT * T / N * S
-    du[2] = βI * I / N * S + βT * T / N * S - θ.γI * I
-    du[3] = θ.ρR * θ.γI * I
-    du[4] = (1 - θ.ρR) * θ.γI * I - θ.γT * T
-    du[5] = (1 - θ.ρD) * θ.γT * T
-    du[6] = θ.ρD * θ.γT * T
-    ## Bookkeeping of total tested
-    du[7] = (1 - θ.ρR) * θ.γI * I
+    du[1] = - βI * (I₁ + I₂) / N * S - βT * T / N * S
+    du[2] = βI * (I₁ + I₂) / N * S + βT * T / N * S - θ.γI₁ * I₁
+    du[3] = (1 - θ.ρT) * θ.γI₁ * I₁ - θ.γI₂ * I₂
+    du[4] = θ.ρT * θ.γI₁ * I₁ - θ.γI₂ * T
+    du[5] = θ.γI₂ * I₂
+    du[6] = (1 - θ.ρD) * θ.γI₂ * T
+    du[7] = θ.ρD * θ.γI₂ * T
 end;
 ```
 
 ```{julia}
 R₀ = 2.5
 τ = 5.0
-θ = SITR(t -> R₀ / τ, t -> R₀ / τ, 2 / τ, 0.0, 2 / τ, 0.1)
+θ = SITR(t -> R₀ / τ, t -> R₀ / τ, 2 / τ, 1.0, 2 / τ, 0.1)
 N = 1e6
 u₀ = vcat(N - 1, 1, fill(0, 5))
 T = 100
@@ -213,7 +213,7 @@ function NegBinom2(μ, ϕ)
     NegativeBinomial(ϕ, ϕ / (μ + ϕ))
 end
 
-function modelsim(u₀, θ, ϕ, T)
+function modelsim(u₀, θ, T)
     tspan = (0.0, T - 1)
     ode = ODEProblem(sitrdxdt!, u₀, tspan, θ)
     solve(ode, RK4())
@@ -221,12 +221,13 @@ end
 
 function loglik(cases, deaths, u₀, θ, ϕ)
     T = length(cases)
-    sol = modelsim(u₀, θ, ϕ, T)
+    sol = modelsim(u₀, θ, T)
     x = sol(0:(T - 1))
 
     ll = 0.0
+    Ttot = x[4, :] .+ x[6, :] .+ x[7, :] ## Total tested
     for t in 1:(T-1)
-        ll += logpdf(NegBinom2( x[7, t + 1] - x[7, t], ϕ.T ),
+        ll += logpdf(NegBinom2( Ttot[t + 1] - Ttot[t], ϕ.T ),
                      cases[t + 1] - cases[t])
         ll += logpdf(NegBinom2( x[6, t + 1] - x[6, t], ϕ.D ),
                      deaths[t + 1] - deaths[t])        
@@ -243,21 +244,20 @@ end
 function fitdemo(df, N; opt = ADAM())
     ## Constrain some parameters, i.e. N is fixed and βT ≡ 0
     ## Instead, we assume that βI changes over time
-    params = rand(Normal(), 4 + 8 + 2)
+    params = rand(Normal(), 13)
 
     function constrain(params)
-        x = vcat(map(exp, params[1:4]),
-                 df.Deaths[1],
-                 df.Cases[1])
+        x = vcat(map(exp, params[1:2]),
+                 df.Cases[1], 0.0, 0.0, df.Deaths[1])
         u₀ = vcat(N - sum(x), x)
         βI(t) = sigmoidal(t,
-                          Flux.σ(params[5]), Flux.σ(params[6]),
-                          exp(params[7]), exp(params[8]))
-        βT(t) = 0.0
+                          Flux.σ(params[3]), Flux.σ(params[4]),
+                          exp(params[5]), exp(params[6]))
+        βT(t) = Flux.σ(params[7]) * βI(t)
         θ = map( (f, x) -> f(x),
                  [exp, Flux.σ, exp, Flux.σ],
-                 params[9:12] )
-        ϕ = (T = exp(params[13]), D = exp(params[14]))
+                 params[8:11] )
+        ϕ = (T = exp(params[12]), D = exp(params[13]))
         u₀, SITR(βI, βT, θ...), ϕ
     end
     function loss(params, cases, deaths)
@@ -279,6 +279,37 @@ end
 ```
 
 ```{julia}
+function optimdemo(df, N; algo = BFGS())
+    ## Constrain some parameters, i.e. N is fixed and βT ≡ 0
+    ## Instead, we assume that βI changes over time
+    params = rand(Normal(), 13)
+
+    function constrain(params)
+        x = vcat(map(exp, params[1:2]),
+                 df.Cases[1], 0.0, 0.0, df.Deaths[1])
+        u₀ = vcat(N - sum(x), x)
+        βI(t) = sigmoidal(t,
+                          Flux.σ(params[3]), Flux.σ(params[4]),
+                          exp(params[5]), exp(params[6]))
+        βT(t) = Flux.σ(params[7]) * βI(t)
+        θ = map( (f, x) -> f(x),
+                 [exp, Flux.σ, exp, Flux.σ],
+                 params[8:11] )
+        ϕ = (T = exp(params[12]), D = exp(params[13]))
+        u₀, SITR(βI, βT, θ...), ϕ
+    end
+    function loss(params, cases, deaths)
+        u₀, θ, ϕ = constrain(params)
+        - loglik(cases, deaths, u₀, θ, ϕ)
+    end
+
+    sol = optimize(p -> loss(p, df.Cases, df.Deaths),
+                   params, algo, Optim.Options(show_trace = true))
+    sol, constrain
+end
+```
+
+```{julia}
 pop = CSV.read("../../data/population.csv")
 rename!(pop,
         Symbol("Country Name") => :Country,
@@ -286,26 +317,28 @@ rename!(pop,
 pop = @where(pop,
              :Year .== maximum(:Year))
 
-plts = []
-for country in ["Italy", "Germany", "China"]
-    foo = @where(df, :Country .== country)
-    tada = fitdemo(foo, @where(pop, :Country .== country).Value[1];
-                   opt = RMSProp(1e-3))
-
-    ode = ODEProblem(sitrdxdt!, tada[1], (0., 100), tada[2])
-    sol = solve(ode, RK4())
-
-    println(country)
-    plt = plot(sol.t, log.(sol[7, :]))
-    plot!(plt, sol.t, log.(sol[6, :]))
-    plot!(plt, 1:nrow(foo), log.(foo.Cases);
-          seriestype = :scatter)
-    plot!(plt, 1:nrow(foo), log.(foo.Deaths);
-          seriestype = :scatter)
-    push!(plts, plt)
+function runfit()
+    plts = []
+    for country in ["Italy", "Germany", "China"]
+        foo = @where(df, :Country .== country)
+        tada = fitdemo(foo, @where(pop, :Country .== country).Value[1];
+                       opt = RMSProp(1e-3))
+        
+        ode = ODEProblem(sitrdxdt!, tada[1], (0., 100), tada[2])
+        sol = solve(ode, RK4())
+        
+        println(country)
+        Ttot = sol[4, :] .+ sol[6, :] .+ sol[7, :] ## Total tested
+        plt = plot(sol.t, log.(Ttot))
+        plot!(plt, sol.t, log.(sol[6, :]))
+        plot!(plt, 1:nrow(foo), log.(foo.Cases);
+              seriestype = :scatter)
+        plot!(plt, 1:nrow(foo), log.(foo.Deaths);
+              seriestype = :scatter)
+        push!(plts, plt)
+    end
+    plot(plts...)
 end
-
-plot(plts...)
 ```
 
 Finally, we try a Turing wrapper for the model. This should enable a

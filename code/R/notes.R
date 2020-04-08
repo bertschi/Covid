@@ -191,7 +191,7 @@ deaths <- df_wiki %>%
     as.matrix()
 
 fit <- sampling(model,
-                data = list(T = nrow(cases), C = ncol(cases), cases = t(cases), deaths = t(deaths)),
+                data = list(T = nrow(cases), C = ncol(cases), cases = t(cases), deaths = t(deaths), sig_type = 1),
                 chains = 2,
                 control = list(adapt_delta = 0.95),
                 seed = 1234,
@@ -206,7 +206,10 @@ gather_draws(fit, p_obs[c]) %>%
               mutate(c = 1:n())) %>%
     ggplot(aes(country, .value)) +
     geom_tufteboxplot() +
-    theme_tufte()
+    theme_tufte() +
+    coord_cartesian(ylim = c(0, 1))
+
+ggsave("../../reports/figs/country_obs.pdf")
 
 gather_draws(fit, tau_die[c]) %>%
     left_join(tibble(country = colnames(cases)) %>%

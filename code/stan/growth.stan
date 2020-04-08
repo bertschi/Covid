@@ -1,12 +1,15 @@
 // Simple hierarchical growth model
 functions {
-  real growth(real t, vector theta) {
-    // Simple logistic function
-    // return theta[1] * 1 / (1 + exp(- (t - theta[2]) / theta[3]));
-    // Generalized logistic function
-    return theta[1] * (1 + exp(- (t - theta[2]) / (theta[3] * theta[4])))^(- theta[4]);
-    // Gompertz function
-    // return theta[1] * exp(- exp(- (t - theta[2]) / theta[3]));
+  real growth(real t, vector theta, int type) {
+    if (type == 1)
+      // Simple logistic function
+      return theta[1] * 1 / (1 + exp(- (t - theta[2]) / theta[3]));
+    else if (type == 2)
+      // Generalized logistic function
+      return theta[1] * (1 + exp(- (t - theta[2]) / (theta[3] * theta[4])))^(- theta[4]);
+    else
+      // Gompertz function
+      return theta[1] * exp(- exp(- (t - theta[2]) / theta[3]));
   }
 }
 data {
@@ -14,6 +17,7 @@ data {
   int<lower=1> C; // Number of countries
   int<lower=0> cases[C, T];
   int<lower=0> deaths[C, T];
+  int<lower=1, upper=3> sig_type;
 }
 parameters {
   vector<lower=0>[4] theta[C];     // Country specific growth parameters
@@ -40,8 +44,8 @@ model {
   // Likelihood
   for (c in 1:C) {
     for (t in 2:T) {
-      cases[c, t] - cases[c, t-1] ~ neg_binomial_2(p_obs[c] * (growth(t - tau_obs[c], theta[c]) - growth(t - tau_obs[c] - 1, theta[c]) + 1e-8), phi[c, 1]);
-      deaths[c, t] - deaths[c, t-1] ~ neg_binomial_2(p_death * (growth(t - tau_obs[c] - tau_die[c], theta[c]) - growth(t - tau_obs[c] - tau_die[c] - 1, theta[c]) + 1e-8), phi[c, 2]);
+      cases[c, t] - cases[c, t-1] ~ neg_binomial_2(p_obs[c] * (growth(t - tau_obs[c], theta[c], sig_type) - growth(t - tau_obs[c] - 1, theta[c], sig_type) + 1e-8), phi[c, 1]);
+      deaths[c, t] - deaths[c, t-1] ~ neg_binomial_2(p_death * (growth(t - tau_obs[c] - tau_die[c], theta[c], sig_type) - growth(t - tau_obs[c] - tau_die[c] - 1, theta[c], sig_type) + 1e-8), phi[c, 2]);
     }
   }
 }
@@ -54,24 +58,24 @@ generated quantities {
   for (c in 1:C) {
     for (t in 2:T) {
       log_lik[c, t-1] = neg_binomial_2_lpmf(cases[c, t] - cases[c, t-1]
-					 | p_obs[c] * (growth(t - tau_obs[c], theta[c]) - growth(t - tau_obs[c] - 1, theta[c]) + 1e-8), phi[c, 1])
+					 | p_obs[c] * (growth(t - tau_obs[c], theta[c], sig_type) - growth(t - tau_obs[c] - 1, theta[c], sig_type) + 1e-8), phi[c, 1])
                     + neg_binomial_2_lpmf(deaths[c, t] - deaths[c, t-1]
-					 | p_death * (growth(t - tau_obs[c] - tau_die[c], theta[c]) - growth(t - tau_obs[c] - tau_die[c] - 1, theta[c]) + 1e-8), phi[c, 2]);
+					 | p_death * (growth(t - tau_obs[c] - tau_die[c], theta[c], sig_type) - growth(t - tau_obs[c] - tau_die[c] - 1, theta[c], sig_type) + 1e-8), phi[c, 2]);
     }
   }
   // Generate predictions
   for (c in 1:C) {
     for (t in 1:T)
-      hidden_pred[c, t] = growth(t, theta[c]);
+      hidden_pred[c, t] = growth(t, theta[c], sig_type);
   }
   
   // Note: First case of predicted counts is an approximation!
   for (c in 1:C) {
-    cases_pred[c, 1] = neg_binomial_2_rng(p_obs[c] * (growth(1 - tau_obs[c], theta[c]) + 1e-8), phi[c, 1]);
-    deaths_pred[c, 1] = neg_binomial_2_rng(p_death * (growth(1 - tau_obs[c] - tau_die[c], theta[c]) + 1e-8), phi[c, 2]);
+    cases_pred[c, 1] = neg_binomial_2_rng(p_obs[c] * (growth(1 - tau_obs[c], theta[c], sig_type) + 1e-8), phi[c, 1]);
+    deaths_pred[c, 1] = neg_binomial_2_rng(p_death * (growth(1 - tau_obs[c] - tau_die[c], theta[c], sig_type) + 1e-8), phi[c, 2]);
     for (t in 2:T) {
-      cases_pred[c, t] = cases_pred[c, t-1] + neg_binomial_2_rng(p_obs[c] * (growth(t - tau_obs[c], theta[c]) - growth(t - tau_obs[c] - 1, theta[c]) + 1e-8), phi[c, 1]);
-      deaths_pred[c, t] = deaths_pred[c, t-1] + neg_binomial_2_rng(p_death * (growth(t - tau_obs[c] - tau_die[c], theta[c]) - growth(t - tau_obs[c] - tau_die[c] - 1, theta[c]) + 1e-8), phi[c, 2]);
+      cases_pred[c, t] = cases_pred[c, t-1] + neg_binomial_2_rng(p_obs[c] * (growth(t - tau_obs[c], theta[c], sig_type) - growth(t - tau_obs[c] - 1, theta[c], sig_type) + 1e-8), phi[c, 1]);
+      deaths_pred[c, t] = deaths_pred[c, t-1] + neg_binomial_2_rng(p_death * (growth(t - tau_obs[c] - tau_die[c], theta[c], sig_type) - growth(t - tau_obs[c] - tau_die[c] - 1, theta[c], sig_type) + 1e-8), phi[c, 2]);
     }
   }
 }

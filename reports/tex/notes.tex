@@ -328,14 +328,15 @@ As shown in \fig{taudie}, this model\footnote{Full code of this and
 indeed finds a consistent difference in the delay of death counts
 between Austria, Germany and France, Italy, Spain. Furthermore, the
 death rate -- assumed constant across all countries -- is estimated as
-$4.8 \pm {1.2 \atop 1.2} \%$. Estimates in the range of 3 to 5\%
+$3.0 \pm {0.8 \atop 0.6} \%$. Estimates in the range of 3 to 5\%
 appear to be rather robust for the present model, yet seem to be
-somewhat too high\footnote{Note that a naive estimation of the case
+somewhat high\footnote{Note that a naive estimation of the case
   fatality rate, i.e. dividing contemporal case by death counts is
   biased downwards by the delay effect as actual deaths only realize
   about a week after subjects had been tested positive. Accordingly
   the fatality rate estimate should be based on the substantially
-  lower case counts a week ago.}. It remains to be seen if my model
+  lower case counts a week ago.} given that the death rate applies to
+the actual and not just the reported cases. It remains to be seen if my model
 estimate holds up over time and wrt estimates derived from more
 realistic models \ldots Yet, the assumption of a global death rate not
 just allows to compare observed counts across countries, but also
@@ -404,10 +405,11 @@ jointly. Indeed, the model is strictly non-identifiable wrt these
 parameters. In turn, I have developed a phenomenological model based
 on sigmoidal growth dynamics. As the model does not strive to model
 precise epidemic dynamics, longer term predictions should be
-considered with care. Here, I only provide nowcasts of actual case
-numbers which nevertheless provide a look into several weeks of the
-future due the delay effect build into the model. In particular, my
-main findings are that
+considered with care
+\cite{https://doi.org/10.1101/2020.03.12.20034595}. Here, I only
+provide nowcasts of actual case numbers which nevertheless provide a
+look into several weeks of the future due the delay effect build into
+the model. In particular, my main findings are that
 \begin{itemize}
 \item the death rate might be higher than commonly assumed. This is
   mainly driven by the rather long delay of 5 to 10 days between
@@ -418,104 +420,125 @@ main findings are that
 \end{itemize}
 Both of these are bad news, as the epidemic could be worse than
 commonly assumed. Furthermore, containment is challenging due to week
-long incubation times but a conbination of case tracing and isolation
-policies could be effective \cite{fraser04}. In the other hand, if
-most cases are actually known effective policies can be implemented as
-evidenced in the currently successful containment in China and South
-Korea. In the end, data analysis alone only gets us that far and more
-extensive testing is urgently needed.
+long incubation times
+\cite{https://doi.org/10.1101/2020.03.25.20043109} but a conbination
+of case tracing and isolation policies could be effective
+\cite{fraser04,kubinec}. On the other hand, if most cases are actually
+known effective policies can be implemented as evidenced in the
+currently successful containment in China and South Korea. In the end,
+data analysis alone only gets us only that far and more extensive
+testing is urgently needed.
 
-\section{Financial markets}
+%% \section{Financial markets}
 
-Especially the containment measures implemented in many countries
-around the world, have major economic consequences. Non-essential
-productive activity has come to a hold and financial markets around
-the world tanked. Furthermore, uncertainty is high and the volatility
-index VIX has reached levels as during the financial crisis of 2007/8.
-\begin{marginfigure}
-  \begin{center}
-    \includegraphics[width=0.95\textwidth]{../figs/VIX.pdf}
-  \end{center}
-  \caption{Closing values of VIX.}
-\end{marginfigure}
-
-\subsection{Implied risk-neutral densities}
-
-To get an impression of the forward-looking market outlook, I
-investigate call and put options on the S\&P 500 index. In particular,
-out- or slightly in-the-money options are actively traded and also
-utilized in the computation of the VIX. \fig{optionchain} shows the
-corresponding prices of call and put options for different expiration
-dates.
-\begin{marginfigure}
-  \begin{center}
-    \includegraphics[width=0.95\textwidth]{../figs/option_chain.pdf}
-  \end{center}
-  \caption{\label{fig:optionchain} Mid prices of call and put options
-    on the S\&P 500. Only out- or slightly in-the-money options with
-    positive bid price are shown. The grey line marks the current spot
-    price.}
-\end{marginfigure}
-
-By risk-neutral pricing, the current value of an option on the
-underlying $S_t$ paying $v(S_T)$ at maturity $T$ is given as
-\[ p_t = \E^{\Q}[e^{- r (T - t)} v(S_T)] \; , \]
-where the expectation is taken over the risk-neutral measure $\Q$. In
-particular, assuming a log-normal risk-neutral distribution $q(s_T)$
-the well known Black-Scholes-Merton (BSM) formulas provides the
-analytic price of European call and put options depending on the
-risk-neutral interest rate $r$, maturity $T$, strike price $K$, spot
-price $S_t$ and volatility $\sigma$. Unfortunately, the BSM has
-several short-comings. Especially the assumption of constant
-volatility does not hold in actual option prices giving rise to the
-famous volatility-smile.
-
-Nevertheless, the model is easily extended towards mixtures of
-log-normal distributions. Then, by linearity of expectation values the
-theoretical price is simply given as a weighted sum of BSM prices for
-the different mixtures components. Here, we fit the above option
-prices with a mixture of two components\footnote{Preliminary results
-  show that more components only marginally improve the fit.}.
+%% Especially the containment measures implemented in many countries
+%% around the world, have major economic consequences. Non-essential
+%% productive activity has come to a hold and financial markets around
+%% the world tanked. Furthermore, uncertainty is high and the volatility
+%% index VIX has reached levels as during the financial crisis of 2007/8.
 %% \begin{marginfigure}
 %%   \begin{center}
-%%     \includegraphics[width=0.95\textwidth]{../figs/model_loo.pdf}
+%%     \includegraphics[width=0.95\textwidth]{../figs/VIX.pdf}
 %%   \end{center}
-%%   \caption{Visual model comparison based on LOO log likelihood.}
+%%   \caption{Closing values of VIX.}
 %% \end{marginfigure}
 
-Compared to a single component, the two component model is
-substantially better and also nicely interpretable. In particular,
-\fig{riskneutral} shows the implied components of the risk neutral
-density. These can readily be interpreted as a good and bad market
-outlook.
-\begin{figure}
-  \begin{center}
-    \includegraphics[width=0.95\textwidth]{../figs/risk_neutral.pdf}
-  \end{center}
-  \caption{\label{fig:riskneutral} Components of fitted implied
-    risk-neutral density. Shown are 100 draws from the posterior
-    distribution.}
-\end{figure}
-Indeed, \fig{crashprob} shows the implied crash probabilities,
-i.e. weight assigned to the bad market component. These are
-surprisingly high and even rise over longer maturities. In this sense,
-option markets already price potentially long and large economic
-distortions. Timely updates of this analysis will be provided and
-hopefully the outlook will become more optimistic any time soon \ldots
-\begin{marginfigure}
-  \begin{center}
-    \includegraphics[width=0.95\textwidth]{../figs/crash_prob.pdf}
-  \end{center}
-  \caption{\label{fig:crashprob} Market implied crash probability
-    derived from two component mixture model.}
-\end{marginfigure}
+%% \subsection{Implied risk-neutral densities}
 
-\cite{https://doi.org/10.1101/2020.03.25.20043109,kubinec,https://doi.org/10.1101/2020.03.12.20034595}
+%% To get an impression of the forward-looking market outlook, I
+%% investigate call and put options on the S\&P 500 index. In particular,
+%% out- or slightly in-the-money options are actively traded and also
+%% utilized in the computation of the VIX. \fig{optionchain} shows the
+%% corresponding prices of call and put options for different expiration
+%% dates.
+%% \begin{marginfigure}
+%%   \begin{center}
+%%     \includegraphics[width=0.95\textwidth]{../figs/option_chain.pdf}
+%%   \end{center}
+%%   \caption{\label{fig:optionchain} Mid prices of call and put options
+%%     on the S\&P 500. Only out- or slightly in-the-money options with
+%%     positive bid price are shown. The grey line marks the current spot
+%%     price.}
+%% \end{marginfigure}
+
+%% By risk-neutral pricing, the current value of an option on the
+%% underlying $S_t$ paying $v(S_T)$ at maturity $T$ is given as
+%% \[ p_t = \E^{\Q}[e^{- r (T - t)} v(S_T)] \; , \]
+%% where the expectation is taken over the risk-neutral measure $\Q$. In
+%% particular, assuming a log-normal risk-neutral distribution $q(s_T)$
+%% the well known Black-Scholes-Merton (BSM) formulas provides the
+%% analytic price of European call and put options depending on the
+%% risk-neutral interest rate $r$, maturity $T$, strike price $K$, spot
+%% price $S_t$ and volatility $\sigma$. Unfortunately, the BSM has
+%% several short-comings. Especially the assumption of constant
+%% volatility does not hold in actual option prices giving rise to the
+%% famous volatility-smile.
+
+%% Nevertheless, the model is easily extended towards mixtures of
+%% log-normal distributions. Then, by linearity of expectation values the
+%% theoretical price is simply given as a weighted sum of BSM prices for
+%% the different mixtures components. Here, we fit the above option
+%% prices with a mixture of two components\footnote{Preliminary results
+%%   show that more components only marginally improve the fit.}.
+%% %% \begin{marginfigure}
+%% %%   \begin{center}
+%% %%     \includegraphics[width=0.95\textwidth]{../figs/model_loo.pdf}
+%% %%   \end{center}
+%% %%   \caption{Visual model comparison based on LOO log likelihood.}
+%% %% \end{marginfigure}
+
+%% Compared to a single component, the two component model is
+%% substantially better and also nicely interpretable. In particular,
+%% \fig{riskneutral} shows the implied components of the risk neutral
+%% density. These can readily be interpreted as a good and bad market
+%% outlook.
+%% \begin{figure}
+%%   \begin{center}
+%%     \includegraphics[width=0.95\textwidth]{../figs/risk_neutral.pdf}
+%%   \end{center}
+%%   \caption{\label{fig:riskneutral} Components of fitted implied
+%%     risk-neutral density. Shown are 100 draws from the posterior
+%%     distribution.}
+%% \end{figure}
+%% Indeed, \fig{crashprob} shows the implied crash probabilities,
+%% i.e. weight assigned to the bad market component. These are
+%% surprisingly high and even rise over longer maturities. In this sense,
+%% option markets already price potentially long and large economic
+%% distortions. Timely updates of this analysis will be provided and
+%% hopefully the outlook will become more optimistic any time soon \ldots
+%% \begin{marginfigure}
+%%   \begin{center}
+%%     \includegraphics[width=0.95\textwidth]{../figs/crash_prob.pdf}
+%%   \end{center}
+%%   \caption{\label{fig:crashprob} Market implied crash probability
+%%     derived from two component mixture model.}
+%% \end{marginfigure}
 
 \bibliographystyle{abbrv}
 \bibliography{notes}
 
 \appendix
+
+\section{Additional figures}
+
+\begin{figure}
+  \begin{center}
+    \includegraphics[width=0.45\textwidth]{../figs/model_pred_Gomp_AUT.pdf}
+    \includegraphics[width=0.45\textwidth]{../figs/model_pred_Gomp_DEU.pdf}
+    \includegraphics[width=0.45\textwidth]{../figs/model_pred_Gomp_FRA.pdf}
+    \includegraphics[width=0.45\textwidth]{../figs/model_pred_Gomp_ITA.pdf}
+    \includegraphics[width=0.45\textwidth]{../figs/model_pred_Gomp_ESP.pdf}
+    \includegraphics[width=0.45\textwidth]{../figs/model_pred_Gomp_USA.pdf}
+    \includegraphics[width=0.45\textwidth]{../figs/model_pred_Gomp_SWE.pdf}
+    \includegraphics[width=0.45\textwidth]{../figs/model_pred_Gomp_CHN.pdf}
+    \includegraphics[width=0.45\textwidth]{../figs/model_pred_Gomp_KOR.pdf}
+    \includegraphics[width=0.45\textwidth]{../figs/model_pred_Gomp_JPN.pdf}
+  \end{center}
+  \caption{\label{fig:modelpredGomp} Model predictions using Gompertz
+    growth dynamics (mean and 95\% credible region) of actual (hidden)
+    and observed case and death counts for different countries. Note
+    the log scale on the vertical axis.}
+\end{figure}
 
 %% \section{Sigmoid model code}
 %% \label{app:model}

@@ -167,7 +167,10 @@ thresholds\footnote{Note that some countries might not have reached
   subplot.} -- which are less noisy -- of 100 (absolute) or 1 per
 million (relative). Furthermore, it is evident that the current growth
 rate of China, South Korea (which are very similar in relative terms)
-and Japan is markedly slower than of the other countries.
+and Japan is markedly slower than of the other countries. Especially,
+the European countries appear quite similar and there is little (if
+any) evidence that Germany reacted faster or better than Italy or
+Spain.
 
 Interestingly, also the case counts are somewhat aligned even though
 day zero has been defined purely based on the death
@@ -187,12 +190,124 @@ infected already before the intervention.
 
 \subsection{Statistical modeling}
 
+Besides the {\em case fatality rate} there are two major unknowns in
+the current pandemic. Namely, the effective transmission or
+reproduction rate of the virus and the fraction of observed
+cases. Both are of major importantance in order to judge the state of
+the pandemic, i.e. how much of the population is already infected, and
+the effectiveness of mitigation measures such as {\em social
+  distancing} that have been or are being implemented around the
+globe. In particular, the future organization of social interactions
+and restrictions relies on as accurate information as possible.
+
+\paragraph{Epidemic model}
+The basic SIR model \cite{Newman}, assumes that an infection unfolds when
+susceptible (S) individuals become infected (I) -- which in turn
+infect further susceptible individuals. Finally, infected individuals
+recover (R) (or die) and are no longer susceptible. In continuous
+time, the dynamics can be described by the following system of
+ordinary differential equations (ODEs):
+\begin{align*}
+  \frac{dS}{dt} &= - \beta \frac{I_t}{N} S_t \\
+  \frac{dI}{dt} &= \beta \frac{I_t}{N} S_t - \gamma I_t \\
+  \frac{dR}{dt} &= \gamma I_t
+\end{align*}
+where $N \equiv S_t + I_t + R_t$ is constant over time. Model
+parameters are
+\begin{itemize}
+\item the infection rate $\beta$
+\item and the recovery rate $\gamma$.
+\end{itemize}
+In this model, the average time of infection is $\gamma^{-1}$ giving
+rise to a {\em basic reproduction number} of $R_0 = \beta
+\gamma^{-1}$.
+
+SIR models and extensions are widely used in epidemic modeling. The
+have also been applied to the understand the dynamics of the ongoing
+Covid-19 pandemic
+\cite{arxiv:2002.07572,arxiv:2004.01105,10.1126/science.abb3221,https://www.medrxiv.org/content/10.1101/2020.02.27.20028639v2}.
+In particular, models including the possibility of unobserved cases or
+including a reporting delay have been developed. Within the SIR
+framework, both effects can be included in several ways, most easily
+by assuming that observed cumulative infections are simply a fraction
+$\alpha \in [0, 1]$ of previous total infections $I_t + R_t$,
+i.e. $\alpha (I_{t - \tau} + R_{t - \tau})$. A more elaborate attempt
+instead considers more detailed dynamics of the form
+\begin{align*}
+  \frac{dS}{dt} &= - \beta_I \frac{S_t}{N} I_t - \beta_O \frac{S_t}{N} O_t - \beta_U \frac{S_t}{N} U_t \\
+  \frac{dI}{dt} &= \beta_I \frac{S_t}{N} I_t + \beta_O \frac{S_t}{N} O_t + \beta_U \frac{S_t}{N} U_t - \gamma_I I_t \\
+  \frac{dO}{dt} &= \alpha \gamma_I I_t - \gamma_R O_t \\
+  \frac{dU}{dt} &= (1 - \alpha) \gamma_I I_t - \gamma_R U_t \\
+  \frac{dR}{dt} &= \gamma_R (O_t + U_t)
+\end{align*}
+where a fraction $\alpha$ of infected individuals $I_t$ is observed
+($O_t$) after an initial delay $\frac{1}{\gamma_I}$. In any case,
+whether observed or not, individuals recover (or die) after an
+additional delay. In general, the infection rates $\beta_I, \beta_O,
+\beta_U$ could be different for initial infections and observed vs
+unobserved cases\footnote{An effective quarantine would be modeled via
+  $\beta_O \equiv 0$.}.
+
+In addition, mitigation measures, e.g. social distancing, can be
+easily included by assuming that $\beta$'s are functions of
+time. E.g. \cite{arxiv:2004.01105} assumes one or several (soft) step
+functions where $\beta$ drops after measures have been
+implemented. Unfortunately, as we show now a model including a
+time-varying $\beta$ as well as unobserved cases is not identifiable.
+For simplicity, consider the above model with $\beta_I = \beta_O =
+\beta_U =: \beta$. Then, new infections arise with intensity $\beta
+\frac{S_t}{N} (I_t + O_t + U_t)$ which in turn translate into observed
+cases with intensity $\alpha \gamma_I I_t$. Now assume a second model
+with $\alpha' = 1 > \alpha$. By using a time varying $\beta'(t)$
+such that
+\begin{align*}
+  \beta'(t) &= \beta \frac{S_t}{S'_t}
+\end{align*}
+we obtain exactly the same number of observed cases $O_t$. Note that
+as $\alpha' > \alpha$, we have that $S_t < S'_t$ and $S_t$ is a
+sigmoidal function of time due to the SIR dynamics. Furthermore, when
+the population is large, i.e. $N \gg 1$ and $S_0 \approx N$ the
+resulting $\beta'(t)$ is mostly driven by the drop in $S_t$ as
+compared to the much smaller change in $S'_t$. Indeed, \fig{SIRapprox}
+shows the dynamics of the above model with $\beta = 0.3, \gamma_I =
+\gamma_R = \frac{2}{10}$\footnote{Giving rise to an $R_0$ of $3$.} and
+$\alpha = 0.1$ starting from $(N = 10^8, 1, 0, 0, 0)$. In turn, the
+dynamics is approximated by the best-fitting logistic sigmoid scaling
+$\beta'(t)$ and assuming $\alpha' = 1$. Note that the number of
+observed cases is almost identical whereas the final fraction of
+susceptible individuals is vastly different. Indeed, in the first case
+the epidemic is stopped by group immunity whereas in the second case
+effective mitigation measures are imposed. Correspondingly, police
+implications would be vastly different in the two situations even
+though they are observationally indistinguishable.
+\begin{figure}
+  \includegraphics[width=0.45\textwidth]{../figs/approx_infect.pdf}
+  \includegraphics[width=0.45\textwidth]{../figs/approx_suscept.pdf}
+  \caption{\label{fig:SIRapprox} Total cumulative observed infections
+    and number of susceptible individuals in two simulated model with
+    observation fraction $\alpha = 0.1$ (true) and observation
+    fraction $\alpha' = 1$ (approx). In the second model, the epidemic
+    is stopped due to mitigation measures which are modeled via
+    $\beta'(t)$ as explained in the main text.}
+\end{figure}
+
 \paragraph{Phenomenological growth model}
+In order to build an identifiable model, we turn to a simpler
+phenomenological description (compare \cite{kubinec} for a similar
+approach). In particular, as sigmoidal growth provides a good
+approximation to the SIR model dynamics we now directly model the
+observed growth of reported cases and deaths. Furthermore, we use a
+strong assumption to identify the model.
+
 Overall, I believe it unlikely that the death rate is very different
 across different countries\footnote{There are certainly demographic,
-  medical or other aspects though.}. Next, I build a phenomenological
-model on the assumption that the {\em death rate is constant across
-  all countries} and differences purely arise from delays in reporting
+  medical or other aspects though.}. Thus, my phenomenological model
+builds on the assumption that the {\em death rate is constant across
+  all countries}\footnote{Note that this is not the case fatality rate
+  which is commonly computed as the quotient of observed deaths and
+  cases. Instead, the death rate applies to the actual, hidden number
+  of cases and reveals itself in reported observations after the
+  fact.} and differences purely arise from delays in reporting
 positively tested cases and deaths. The model assumes the following:
 \begin{itemize}
 \item The probability of death is the same for all countries whereas
@@ -200,38 +315,51 @@ positively tested cases and deaths. The model assumes the following:
 \item Observed counts are negative binomial distributed -- as an
   over-dispersed Poisson -- and delayed wrt the actual cases.
 \item Actual case and death counts in each country grow according to a
-  sigmoid function\footnote{A more realistic model should build on
-    epidemic dynamics such as SEIR \ldots see below.} with country
-  specific parameters\footnote{The basic model assumes \[ c(t) = a (1
-    + e^{- \beta \nu (t - \tau)})^{- \frac{1}{\nu}} \; , \] i.e. a
-    generalized logistic function.}.
+  sigmoid function -- as an approximation to an SIR type model -- with
+  country specific parameters\footnote{The basic model assumes \[ c(t)
+    = \frac{a}{1 + e^{- \beta (t - \tau)}} \; , \] i.e. the logistic
+    function. Extensions using Gompertz or generalized logistic
+    functions are also explored.}.
 \end{itemize}
 
 As shown in \fig{taudie}, this model\footnote{Full code of this and
-  other models can be found at my accompanying \href{Github}{\url{}}
-  repository.} indeed finds a consistent difference in the delay of
-death counts between Austria, Germany and France, Italy,
-Spain. Furthermore, the death rate -- assumed constant across all
-countries -- is estimated as $4.8 \pm {1.2 \atop 1.2} \%$. Estimates
-in the range of 3 to 5\% appear to be rather robust for the present
-model, yet seem to be somewhat too high\footnote{Note that a naive
-  estimation of the death rate, i.e. dividing contemporal case by
-  death counts is biased downwards by the delay effect as actual
-  deaths only realize about a week later. Accordingly the death rate
-  estimate should be based on the substantially lower case counts a
-  week ago.}. It remains to be seen if my model estimate holds up over
-time and wrt estimates derived from more realistic models \ldots
+  other models can be found at my accompanying
+  \href{Github}{\url{https://github.com/bertschi/Covid}} repository.}
+indeed finds a consistent difference in the delay of death counts
+between Austria, Germany and France, Italy, Spain. Furthermore, the
+death rate -- assumed constant across all countries -- is estimated as
+$4.8 \pm {1.2 \atop 1.2} \%$. Estimates in the range of 3 to 5\%
+appear to be rather robust for the present model, yet seem to be
+somewhat too high\footnote{Note that a naive estimation of the case
+  fatality rate, i.e. dividing contemporal case by death counts is
+  biased downwards by the delay effect as actual deaths only realize
+  about a week after subjects had been tested positive. Accordingly
+  the fatality rate estimate should be based on the substantially
+  lower case counts a week ago.}. It remains to be seen if my model
+estimate holds up over time and wrt estimates derived from more
+realistic models \ldots Yet, the assumption of a global death rate not
+just allows to compare observed counts across countries, but also
+identifies the model as all curves are scaled in the same absolute
+fashion. Furthermore, jointly fitting the model on several countries
+thereby pools information from observed case and death counts
+explaining their differences purely as arising from different growth
+dynamics and delays.
 
 Detailed model predictions for all considered countries are shown in
 \fig{modelpred}. The predictions are mostly reasonable, but the model
 has difficulty of matching the rapid leveling off observed in China
-and South Korea. Interestingly, the model predicts that the curve has
-already slowed markedly in Germany and Italy even though this is
-barely visible in the raw numbers by now -- another example of why the
-delay effect is important in understanding the dynamics of the
+and South Korea -- which has been shown to be rather well explained by
+SIR type dynamics with effective quarantine
+\cite{arxiv:2002.07572}. Interestingly, the model predicts that the
+curve has already slowed markedly in Germany and Italy even though
+this is barely visible in the raw numbers by now -- another example of
+why the delay effect is important in understanding the dynamics of the
 COVID-19 pandemic. Yet, this model prediction relies heavily on the
 assumption of sigmoidal growth and I would not be too optimistic about
-it.
+it. Indeed, the predicted slow-down is less pronounced when assuming
+Gompertz growth which has also been observed in
+\cite{https://doi.org/10.1101/2020.03.12.20034595}. Yet, in terms of
+leave-one-out likelihood the logistic model is preferred (not shown).
 
 \begin{figure}
   \begin{center}
@@ -260,29 +388,42 @@ it.
     axis.}
 \end{figure}
 
-\paragraph{Epidemic model}
-The basic SIR model, assumes that an infection unfolds when
-susceptible (S) individuals become infected (I) -- which in turn
-infect further susceptible individuals. Finally, infected individuals
-recover (R) (or die) and are no longer susceptible. In continuous
-time, the dynamics can be described by the following system of
-ordinary differential equations (ODEs):
-\begin{align*}
-  \frac{dS}{dt} &= - \beta \frac{I_t}{N} S_t \\
-  \frac{dI}{dt} &= \beta \frac{I_t}{N} S_t - \gamma I_t \\
-  \frac{dR}{dt} &= \gamma I_t
-\end{align*}
-where $N \equiv S_t + I_t + R_t$ is constant over time. Model
-parameters are
-\begin{itemize}
-\item the infectivity $\beta$
-\item and the recovery rate $\gamma$.
-\end{itemize}
-In this model, the average time of infection is $\gamma^{-1}$ giving
-rise to a {\em base reproduction number} of $R_0 = \beta
-\gamma^{-1}$.
+\section{Discussion}
+Accurately understanding and modeling the ongoing Covid-19 pandemic is
+crucial in order to establish effective and timely counter
+measures. Yet, major quantities of interest are not known precisely
+and especially delays of several weeks between first infection,
+eventual symptoms and death make it particularly challenging to
+quantify the effectiveness of social distancing. In turn, losening
+restrictions prematurely could reestablish exponential spreading with
+devstating consequences.
 
-\todo[inline]{Build and discuss model with delay effect \ldots}
+Here, I have shown that in SIR type models the fraction of reported
+cases and effectiveness of social distancing cannot be estimated
+jointly. Indeed, the model is strictly non-identifiable wrt these
+parameters. In turn, I have developed a phenomenological model based
+on sigmoidal growth dynamics. As the model does not strive to model
+precise epidemic dynamics, longer term predictions should be
+considered with care. Here, I only provide nowcasts of actual case
+numbers which nevertheless provide a look into several weeks of the
+future due the delay effect build into the model. In particular, my
+main findings are that
+\begin{itemize}
+\item the death rate might be higher than commonly assumed. This is
+  mainly driven by the rather long delay of 5 to 10 days between
+  reported cases and eventual death.
+\item the fraction of unobserved cases might be rather low and
+  definitely does not exceed the reported case numbers tenfold as
+  sometimes stated.
+\end{itemize}
+Both of these are bad news, as the epidemic could be worse than
+commonly assumed. Furthermore, containment is challenging due to week
+long incubation times but a conbination of case tracing and isolation
+policies could be effective \cite{fraser04}. In the other hand, if
+most cases are actually known effective policies can be implemented as
+evidenced in the currently successful containment in China and South
+Korea. In the end, data analysis alone only gets us that far and more
+extensive testing is urgently needed.
 
 \section{Financial markets}
 
@@ -368,6 +509,11 @@ hopefully the outlook will become more optimistic any time soon \ldots
   \caption{\label{fig:crashprob} Market implied crash probability
     derived from two component mixture model.}
 \end{marginfigure}
+
+\cite{https://doi.org/10.1101/2020.03.25.20043109,kubinec,https://doi.org/10.1101/2020.03.12.20034595}
+
+\bibliographystyle{abbrv}
+\bibliography{notes}
 
 \appendix
 

@@ -75,7 +75,7 @@ function plotsol(dxdt, u₀, T, θ)
     tspan = (0.0, T)
     ode = ODEProblem(dxdt, u₀, tspan, θ)
     sol = solve(ode, RK4())
-    plot(sol)
+    plot(sol), sol
 end
 
 R₀ = 2.5
@@ -186,8 +186,8 @@ end;
 ```{julia}
 R₀ = 2.5
 τ = 5.0
-θ = SITR(t -> R₀ / τ, t -> R₀ / τ, 2 / τ, 1.0, 2 / τ, 0.1)
-N = 1e6
+θ = SITR(t -> R₀ / τ, t -> R₀ / τ, 1 / τ, 0.1, 1 / τ, 0.03)
+N = 80e6
 u₀ = vcat(N - 1, 1, fill(0, 5))
 T = 100
 plotsol(sitrdxdt!, u₀, T, θ)

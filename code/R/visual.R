@@ -23,6 +23,15 @@ df <- df_raw %>%
     gather(type, value,
            absolute, relative)
 
+df_chg <- df_raw %>%
+    gather(series, daily,
+           cases, deaths) %>%
+    ## Compute relative values
+    mutate(absolute = daily,
+           relative = absolute / popData2018) %>%
+    gather(type, change,
+           absolute, relative)
+
 ## country_codes <- c("CHN", "ITA", "DEU", "USA", "FRA", "ESP", "GBR", "KOR", "AUT", "SWE", "JPN", "TWN")
 country_codes <- c("USA", "CHN", "ESP", "FRA", "ITA", "DEU", "GBR", "AUT", "AUS", "KOR")
 
@@ -55,10 +64,10 @@ day_from_thresh <- function(date, val, thresh) {
 }
 
 df_thresh <- tribble(~ type, ~ threshold,
-                     ## "absolute", 10,
+                     "absolute", 10,
                      "absolute", 100,
                      "absolute", 1000,
-                     ## "relative", 1e-7,
+                     "relative", 1e-7,
                      "relative", 1e-6,
                      "relative", 1e-5) %>%
     full_join(df %>%
@@ -94,6 +103,22 @@ df_thresh %>%
     labs(x = "Relative days",
          y = "Count/fraction")
 
+plot_nytimes <- function (df) {
+    df %>%
+        ggplot(aes(as.numeric(relday), value)) +
+        geom_line(aes(group = country2),
+                  data = df %>%
+                      rename(country2 = country),
+                  color = "grey") +
+        geom_line(size = 1.2) +
+        scale_y_log10() +
+        facet_wrap(~ country) +
+        theme_tufte() +
+        theme(text = element_text(size = 12)) +
+        labs(x = "Relative days",
+             y = "Count/fraction")    
+}
+
 ## Now select nicest alignment and compute case fatality rates for
 ## different delays between cases and deaths
 df_cfr <- df_thresh %>%
@@ -125,6 +150,23 @@ df_cfr %>%
     scale_y_log10() +
     scale_color_viridis_c()
 
+plot_cfr <- function (df_cfr, country) {
+    df_cfr %>%
+        filter(country == !!country) %>%
+        filter(type == "relative" & threshold == 1e-6) %>%
+        filter(relday >= 0) %>%
+        filter(delay < 12) %>%
+        ggplot(aes(as.numeric(relday), cfr)) +
+        geom_smooth(method = "lm",
+                    se = FALSE,
+                    color = "grey") +
+        geom_line() +
+        facet_wrap(~ delay) +
+        theme_tufte() +
+        theme(panel.grid.major.y = element_line(color = "grey")) +
+        coord_cartesian(ylim = c(0, 0.25))
+}
+
 ## This is it ... purely visual identification of crucial unknowns!!!
 
 model <- function (data) {
@@ -134,10 +176,10 @@ model <- function (data) {
            lin_loss = fit["relday"])
 }
 
-model <- function (data) {
-    tibble(cfr_est = mean(data$cfr),
-           lin_loss = var(data$cfr))
-}
+## model <- function (data) {
+##     tibble(cfr_est = mean(data$cfr),
+##            lin_loss = var(data$cfr))
+## }
 
 df_est <- df_cfr %>%
     filter(country %in% country_codes) %>%
@@ -198,3 +240,21 @@ df_thresh %>%
     theme(legend.position = "top",
           text = element_text(size = 12),
           panel.grid.major.y = element_line(color = "grey"))
+
+plot_nytimes(df_thresh %>%
+             group_by_at(vars(-value)) %>%
+             mutate(uid = 1:n()) %>%
+             ungroup() %>%
+             spread(series, value) %>%
+             select(- uid) %>%
+             filter(country %in% country_codes) %>%
+             filter(type == "relative" & threshold == 1e-6) %>%
+             left_join(df_est) %>%
+             drop_na() %>%
+             group_by(type, threshold, country) %>%
+             mutate(relday = relday + delay_est,
+                    value = case_fct * cases)) +
+    coord_cartesian(xlim = c(-10, 40),
+                    ylim = c(1e-7, 1e-1)) +
+    theme(panel.grid.major.y = element_line(color = "grey"),
+          panel.grid.minor.y = element_line(color = "lightgrey"))

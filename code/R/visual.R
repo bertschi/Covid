@@ -47,6 +47,8 @@ country_codes <- df %>%
     distinct(country) %>%
     .$country
 
+country_codes <- c("KOR", country_codes)
+
 df %>%
     ggplot(aes(date, value,
                color = country)) +
@@ -64,10 +66,10 @@ day_from_thresh <- function(date, val, thresh) {
 }
 
 df_thresh <- tribble(~ type, ~ threshold,
-                     "absolute", 10,
+                     ## "absolute", 10,
                      "absolute", 100,
                      "absolute", 1000,
-                     "relative", 1e-7,
+                     ## "relative", 1e-7,
                      "relative", 1e-6,
                      "relative", 1e-5) %>%
     full_join(df %>%
@@ -91,7 +93,7 @@ df_thresh %>%
     filter(country %in% country_codes) %>%
     ggplot(aes(as.numeric(relday), value,
                color = country)) +
-    geom_line(size = 1.2) +
+    geom_line(size = 1.1) +
     scale_y_log10() +
     ## scale_color_brewer(palette = "Paired") +
     scale_color_viridis_d() +
@@ -102,6 +104,8 @@ df_thresh %>%
           text = element_text(size = 12)) +
     labs(x = "Relative days",
          y = "Count/fraction")
+
+ggsave("../../reports/figs/ecdc_align_all.pdf")
 
 plot_nytimes <- function (df) {
     df %>%
@@ -163,9 +167,16 @@ plot_cfr <- function (df_cfr, country) {
         geom_line() +
         facet_wrap(~ delay) +
         theme_tufte() +
-        theme(panel.grid.major.y = element_line(color = "grey")) +
-        coord_cartesian(ylim = c(0, 0.25))
+        theme(panel.grid.major.y = element_line(color = "grey"))
 }
+
+plot_cfr(df_cfr, "ITA") +
+    coord_cartesian(ylim = c(0, 0.4))
+ggsave("../../reports/figs/ecdc_cfr_delay_ITA.pdf")
+
+plot_cfr(df_cfr, "DEU") +
+    coord_cartesian(ylim = c(0, 0.1))
+ggsave("../../reports/figs/ecdc_cfr_delay_DEU.pdf")
 
 ## This is it ... purely visual identification of crucial unknowns!!!
 
@@ -173,13 +184,9 @@ model <- function (data) {
     fit <- coef(lm(cfr ~ relday,
                    data = data))
     tibble(cfr_est = mean(data$cfr), ## fit["(Intercept)"],
-           lin_loss = fit["relday"])
+           lin_loss = fit["relday"],
+           num_data = nrow(data))
 }
-
-## model <- function (data) {
-##     tibble(cfr_est = mean(data$cfr),
-##            lin_loss = var(data$cfr))
-## }
 
 df_est <- df_cfr %>%
     filter(country %in% country_codes) %>%
@@ -187,14 +194,15 @@ df_est <- df_cfr %>%
     filter(relday >= 0 & is.finite(cfr)) %>%
     group_by(type, threshold, country, delay) %>%
     ## remove groups with few data points
-    filter(n() > 10) %>%
+    filter(n() > 2) %>%
     nest() %>%
     mutate(fit = map(data, model)) %>%
     unnest(fit) %>%
     group_by(type, threshold, country) %>%
     arrange(abs(lin_loss)) %>%
     summarize(delay_est = first(delay),
-              cfr_est = first(cfr_est)) %>%
+              cfr_est = first(cfr_est),
+              num_data = first(num_data)) %>%
     ungroup() %>%
     ## lower bound on unobserved cases
     group_by(type, threshold) %>%
@@ -205,14 +213,20 @@ df_est %>%
            delay_est, cfr_est,
            case_fct) %>%
     ggplot(aes(country, value,
-               color = interaction(type, threshold))) +
-    geom_point(size = 3,
-               alpha = 0.4) +
+               shape = interaction(type, threshold))) +
+    geom_point(aes(size = num_data)) +
     facet_grid(est ~ .,
                scales = "free") +
-    scale_color_colorblind() +
+    scale_shape_manual(values = 1:4) +
     theme_tufte() +
-    theme(panel.grid.major.y = element_line(color = "grey"))
+    theme(text = element_text(size = 12),
+          panel.grid.major.y = element_line(color = "lightgrey"),
+          panel.border = element_rect(fill = NA, color = "grey")) +
+    labs(x = NULL, y = NULL,
+         shape = "Threshold",
+         size = "# data")
+
+ggsave("../../reports/figs/ecdc_estimates.pdf")
 
 ## Show case data shifted and scaled according to estimates
 
@@ -250,11 +264,35 @@ plot_nytimes(df_thresh %>%
              filter(country %in% country_codes) %>%
              filter(type == "relative" & threshold == 1e-6) %>%
              left_join(df_est) %>%
-             drop_na() %>%
              group_by(type, threshold, country) %>%
              mutate(relday = relday + delay_est,
                     value = case_fct * cases)) +
     coord_cartesian(xlim = c(-10, 40),
                     ylim = c(1e-7, 1e-1)) +
     theme(panel.grid.major.y = element_line(color = "grey"),
-          panel.grid.minor.y = element_line(color = "lightgrey"))
+          panel.grid.minor.y = element_line(color = "lightgrey")) +
+    labs(x = "Relative days since 1 death per mill.",
+         y = "Fraction")
+
+ggsave("../../reports/figs/ecdc_nyt_case_est_1permill.pdf")
+
+plot_nytimes(df_thresh %>%
+             group_by_at(vars(-value)) %>%
+             mutate(uid = 1:n()) %>%
+             ungroup() %>%
+             spread(series, value) %>%
+             select(- uid) %>%
+             filter(country %in% country_codes) %>%
+             filter(type == "relative" & threshold == 1e-5) %>%
+             left_join(df_est) %>%
+             group_by(type, threshold, country) %>%
+             mutate(relday = relday + delay_est,
+                    value = case_fct * cases)) +
+    coord_cartesian(xlim = c(-10, 40),
+                    ylim = c(1e-7, 1e-1)) +
+    theme(panel.grid.major.y = element_line(color = "grey"),
+          panel.grid.minor.y = element_line(color = "lightgrey")) +
+    labs(x = "Relative days since 10 death per mill.",
+         y = "Fraction")
+
+ggsave("../../reports/figs/ecdc_nyt_case_est_10permill.pdf")

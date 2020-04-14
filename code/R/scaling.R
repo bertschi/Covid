@@ -124,25 +124,23 @@ df_est <- df_cfr %>%
 ## New figures and rescaling
 ################################################################################
 
-tau <- 5
+tau <- 3
 
 df_thresh %>%
     filter(country %in% country_codes &
            series == "deaths") %>%
     group_by(country, threshold) %>%
     arrange(relday) %>%
-    mutate(chg = value - lag(value, tau)) %>%
-    drop_na() %>%
-    mutate(scaling = cumsum(chg)) %>%
-    ungroup() %>%
+    mutate(kappa = (log(value) - log(lag(value, tau))) / tau) %>%
     filter(relday > -10) %>%
+    mutate(scaling = cumsum(kappa) - sum(kappa[relday < 0])) %>%
+    ungroup() %>%
     ggplot(aes(scaling, value,
                group = country,
                color = as.numeric(relday))) +
-    geom_path() +
+    geom_line() +
     scale_color_viridis_c(direction = -1) +
     scale_y_log10() +
-    scale_x_log10() +
     theme_tufte() +
     facet_wrap(~ threshold)
 
@@ -151,17 +149,15 @@ df_thresh %>%
            series == "deaths") %>%
     group_by(country, threshold) %>%
     arrange(relday) %>%
-    mutate(chg = value - lag(value, tau)) %>%
-    drop_na() %>%
-    mutate(scaling = cumsum(chg)) %>%
-    ungroup() %>%
+    mutate(kappa = (log(value) - log(lag(value, tau))) / tau) %>%
     filter(relday > -10) %>%
+    mutate(scaling = cumsum(kappa) - sum(kappa[relday < 0])) %>%
+    ungroup() %>%
     ggplot(aes(scaling, value,
                color = country)) +
     geom_path(size = 0.8) +
     scale_color_viridis_d() +
     scale_y_log10() +
-    scale_x_log10() +
     facet_wrap(~ threshold) +
     theme_tufte() +
     theme(legend.position = "top",
@@ -181,9 +177,9 @@ df_scaling <- df_thresh %>%
     select(- uid) %>%
     group_by(type, threshold, country) %>%
     arrange(relday) %>%
-    mutate(chg = deaths - lag(deaths, tau)) %>%
-    drop_na() %>%
-    mutate(scaling = cumsum(chg)) %>%
+    mutate(kappa = (log(deaths) - log(lag(deaths, tau))) / tau) %>%
+    filter(relday > -10) %>%
+    mutate(scaling = cumsum(kappa) - sum(kappa[relday < 0])) %>%
     ungroup() %>%
     gather(series, value,
            deaths, cases)
@@ -197,7 +193,6 @@ df_scaling %>%
     geom_path(size = 0.8) +
     scale_color_viridis_d() +
     scale_y_log10() +
-    scale_x_log10() +
     theme_tufte() +
     facet_grid(threshold ~ series) +
     theme_tufte() +
@@ -230,7 +225,6 @@ df_scaling %>%
                color = country)) +
     geom_line(size = 0.8) +
     scale_y_log10() +
-    scale_x_log10() +
     scale_color_viridis_d() +
     facet_wrap(~ type + threshold) +
     theme_tufte() +

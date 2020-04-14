@@ -35,10 +35,11 @@ end
 cases(sol) = map(u -> u[2] + u[3], sol.u)
 deaths(sol, cfr) = map(u -> cfr * u[3], sol.u)
 
-I₀ = 1 / 1e8
+I₀ = 1e-7
 N = 1
 γ = big(1 / 8)
-β₁(t, u) = γ * (3 + (2 - 3) * logistic(t - 70))
+## β₁(t, u) = γ * (3 + (2 - 3) * logistic(t - 70))
+β₁(t, u) = γ * 3
 t = 0:0.1:150
 sol₁ = modelsim(I₀, SIR(β₁, γ), t, N)
 plot(sol₁)
@@ -49,10 +50,12 @@ sol₂ = modelsim(I₀, SIR(β₂, γ), t, N)
 plot(sol₂)
 
 cfr = big(0.01)
-plot(t, log.(hcat(ρ .* cases(sol₁(t)),
-                  cases(sol₂(t)),
-                  ρ .* deaths(sol₁(t), cfr),
-                  deaths(sol₂(t), cfr))))
+τ = 4.5
+plot(t .+ τ,
+     log10.(hcat(ρ .* cases(sol₁(t .+ τ)),
+                 cases(sol₂(t)),
+                 ρ .* deaths(sol₁(t .+ τ), cfr),
+                 deaths(sol₂(t), cfr))))
 
 plot(t, hcat(β₁.(t, nothing), β₂.(t, sol₂(t).u)))
 

@@ -4,6 +4,7 @@
 library(tidyverse)
 library(ggthemes)
 library(lubridate)
+library(latex2exp)
 
 df_raw <- read_csv("https://opendata.ecdc.europa.eu/covid19/casedistribution/csv") %>%
     mutate(date = make_date(year, month, day),
@@ -225,11 +226,15 @@ plot_cfr <- function (df_cfr, country) {
 }
 
 plot_cfr(df_cfr, "ITA") +
-    coord_cartesian(ylim = c(0, 0.4))
+    coord_cartesian(ylim = c(0, 0.4)) +
+    labs(title = "ITA",
+         subtitle = TeX("Estimated $cfr_{\\tau}$ for varying delays $\\tau$"))
 ggsave("../../reports/figs/ecdc_cfr_delay_ITA.pdf")
 
 plot_cfr(df_cfr, "DEU") +
-    coord_cartesian(ylim = c(0, 0.1))
+    coord_cartesian(ylim = c(0, 0.1)) +
+    labs(title = "DEU",
+         subtitle = TeX("Estimated $cfr_{\\tau}$ for varying delays $\\tau$"))
 ggsave("../../reports/figs/ecdc_cfr_delay_DEU.pdf")
 
 ## This is it ... purely visual identification of crucial unknowns!!!
@@ -269,6 +274,10 @@ df_est %>%
     gather(est, value,
            delay_est, cfr_est,
            frac_obs) %>%
+    mutate(est = map_chr(est,
+                         ~ list(delay_est = "Delay $\\tau$",
+                                cfr_est = "CFR",
+                                frac_obs = "Fraction of observed cases")[[.x]])) %>%
     ggplot(aes(country, value,
                shape = factor(threshold))) +
     geom_point(## aes(size = num_data),
@@ -276,12 +285,17 @@ df_est %>%
                fill = "black",
                position = position_dodge(width = 0.8)) +
     facet_grid(est ~ .,
-               scales = "free") +
+               scales = "free",
+               labeller = function (labels, multi_line = TRUE) {
+                   label_parsed(map(labels, ~ TeX(.x)),
+                                multi_line)
+               }) +
     scale_shape_manual(values = c(1, 5, 21, 23)) +
     theme_tufte() +
     theme(text = element_text(size = 12),
           panel.grid.major.y = element_line(color = "lightgrey"),
-          panel.border = element_rect(fill = NA, color = "grey")) +
+          ## panel.border = element_rect(fill = NA, color = "grey")
+          ) +
     labs(x = NULL, y = NULL,
          shape = "Threshold",
          size = "# data")

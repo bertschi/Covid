@@ -356,3 +356,61 @@ plot_nytimes(df_thresh %>%
 
 ggsave("../../reports/figs/ecdc_nyt_case_est_eightpermill.pdf")
 
+## SIR fitting
+
+library(rstan)
+library(bayesplot)
+library(tidybayes)
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+
+model <- stan_model("../stan/sir.stan")
+
+foo <- df_thresh %>%
+    filter(country == "ITA" &
+           threshold == 2e-6 &
+           relday > -10) %>%
+    arrange(relday) %>%
+    mutate(value = value * popData2018) %>%
+    spread(series, value)
+
+fit <- sampling(model,
+                data = list(T = nrow(foo),
+                            cases = round(foo$cases),
+                            deaths = round(foo$deaths),
+                            N = unique(foo$popData2018),
+                            T_pred = 10,
+                            cfr = 0.01),
+                chains = 2)
+
+df_pred <- gather_draws(fit,
+                        cases_pred[t], deaths_pred[t], x_pred[t, d]) %>%
+    group_by(.iteration, .chain, t, .variable) %>%
+    arrange(d) %>%
+    summarize(.value = ifelse(length(d) > 1,
+                              .value[2] + .value[3],
+                              .value))
+df_pred %>%
+    filter(.iteration < 50) %>%
+    group_by(.iteration, .chain, .variable) %>%
+    arrange(t) %>%
+    mutate(.change = .value - lag(.value)) %>%
+    ungroup() %>%
+    ggplot(aes(t, .value / unique(foo$popData2018),
+               color = .variable,
+               group = interaction(.variable, .iteration, .chain))) +
+    geom_line(alpha = 0.4) +
+    scale_y_log10() +
+    scale_color_colorblind() +
+    theme_tufte() +
+    geom_line(aes(t, value / unique(foo$popData2018),
+                  group = series),
+              data = foo %>%
+                  mutate(t = 1:n()) %>%
+                  gather(series, value,
+                         cases, deaths) %>%
+                  group_by(series) %>%
+                  arrange(t) %>%
+                  mutate(change = value - lag(value)),
+              color = "red")

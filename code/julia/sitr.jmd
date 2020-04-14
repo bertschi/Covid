@@ -370,15 +370,18 @@ using Turing
         u₀ = [N - (I + R₁ + T + R₂ + D - Ttot), I, R₁, T, R₂, D, Ttot]
         θ = SITR(t -> βI, t -> βT, γI, ρR, γT, ρD)
         ϕ = (T = ϕT, D = ϕD)
-        T = length(Δc) + 1
-        sol = modelsim(u₀, θ, ϕ, T)
-        x = sol(0:(T - 1))
-        for t in 1:(T - 1)
-            Δc[t] ~ NegBinom2( x[7, t + 1] - x[7, t], ϕ.T )
-            Δd[t] ~ NegBinom2( x[6, t + 1] - x[6, t], ϕ.D )
+        T = length(Δc)
+        tspan = (0.0, T)
+        ode = ODEProblem(sitrdxdt!, u₀, tspan, θ)
+        ## sol = solve(ode, Euler(); dt = 1)
+        sol = solve(ode, RK4())
+        x = Array(sol(0:T))
+        for t in 1:T
+            Δc[t] ~ NegBinom2( sum(x[[4,6], t + 1]) - sum(x[[4,6], t]), ϕ.T )
+            Δd[t] ~ NegBinom2( x[7, t + 1] - x[7, t], ϕ.D )
         end
     catch
-        Inf
+        - Inf
     end
 end
 ```

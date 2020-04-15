@@ -60,7 +60,7 @@ function NegBinom2(μ, ϕ)
     NegativeBinomial(ϕ, ϕ / (μ + ϕ))
 end
 
-function fitbeta(sol, θ)
+function fitbeta(sol, θ, τ)
     T = maximum(sol.t)
     u₀ = sol.u[1]
     Iobs = map(u -> u[3] + u[5], sol.u) ## cumulative observed cases
@@ -73,7 +73,7 @@ function fitbeta(sol, θ)
     end
     function loss(params)
         model = fit(params)
-        Ifit = map(u -> u[3] + u[5], model(sol.t).u)
+        Ifit = map(u -> u[3] + u[5], model(sol.t .- τ).u)
         ## sum((log.(fit(params)[2:end]) .- log.(Iobs[2:end])).^2)
         sum((Ifit .- Iobs).^2)
     end
@@ -85,7 +85,7 @@ function fitbeta(sol, θ)
     opt, fit
 end
 
-opt, model = fitbeta(sol, θ)
+opt, model = fitbeta(sol, θ, 5.0)
 
 df = vcat((@linq DataFrame(sol') |>
            transform(t = sol.t,
@@ -99,6 +99,7 @@ df |> CSV.write("/tmp/foo.csv")
 
 ## library(tidyverse)
 ## library(ggthemes)
+## library(latex2exp)
 
 ## df <- read_csv("/tmp/foo.csv")
 

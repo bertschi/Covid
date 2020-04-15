@@ -68,7 +68,7 @@ of potential deaths never findings hint at a much more modest outcome
 \cite{Lourenco2020.03.24.20042291,imperial2}. Especially the case
 fatality rate (CFR) and the number of unobserved infections are
 crucial to judge the state of the pandemic as well as the
-effectiveness of its mitigation. Yet, there estimates are plaqued with
+effectiveness of its mitigation. Yet, there estimates are plagued with
 high uncertainties as exemplified in the quick revisions even from the
 same institution \cite{imperial1,imperial2}
 
@@ -153,7 +153,7 @@ course of relative case and death counts. Aligning dates in this
 fashion shows that several countries exhibit similar time courses,
 e.g. Belgium and Spain or China and South Korea. As shown in the
 supplementary \fig{scaling} the remaining country specific differences
-can be explained by differences in growth rates.  Rescaling time
+can be explained by differences in growth rates.  Re-scaling time
 according to the estimated doubling time indeed leads to a data
 collapse as complete as often observed in physical systems exhibiting
 scaling laws \cite{stanley99}.
@@ -267,9 +267,9 @@ the implied relative case counts when shifted by the estimated delays
 and scaled to reflect the unobserved fraction of cases for each
 country. Notably, these implied counts all align nearly as good as the
 death counts in \fig{aligned_data} (right panel) even though the
-initial thresholding was based on the deaths counts alone. The
+initial threshold was based on the deaths counts alone. The
 supplementary \fig{scaling_case_est} shows that this holds also when
-rescaling time according to the growth rate of deaths. Overall, the
+re-scaling time according to the growth rate of deaths. Overall, the
 collapse of implied case dynamics convincingly illustrates that the
 relation between case and death counts is fully and reliably captured
 by two parameters -- compatible with three reasonable assumptions.
@@ -350,37 +350,38 @@ For simplicity, consider the above model with $\beta_I = \beta_O =
 \beta_U =: \beta$. Then, new infections arise with intensity $\beta
 \frac{S_t}{N} (I_t + O_t + U_t)$ which in turn translate into observed
 cases with intensity $\alpha \gamma_I I_t$. Now assume a second model
-with $\alpha' = 1 > \alpha$. By using a time varying $\beta'(t)$
-such that
+with $\alpha' = 1 > \alpha$ which nevertheless exhibits the same
+dynamics with an additional time shift $\tau$. By using a time varying
+$\beta'(t)$ such that
 \begin{align*}
-  \beta'(t) &= \alpha \beta \frac{S_t}{S'_t}
+  \beta'(t) &= \alpha \beta \frac{S_{t + \tau}}{S'_t}
 \end{align*}
-we obtain exactly the same number of observed cases $O_t$. Note that
-as $\alpha' > \alpha$, we have that $S_t < S'_t$ and $S_t$ is a
-sigmoidal function of time due to the SIR dynamics. Furthermore, when
-the population is large, i.e. $N \gg 1$ and $S_0 \approx N$ the
-resulting $\beta'(t)$ is mostly driven by the drop in $S_t$ as
-compared to the much smaller change in $S'_t$. Indeed, \fig{SIRapprox}
-shows the dynamics of the above model with $\beta = 0.3, \gamma_I =
-\gamma_R = \frac{2}{10}$\footnote{Giving rise to an $R_0$ of $3$.} and
-$\alpha = 0.1$ starting from $(N = 10^8, 1, 0, 0, 0)$. In turn,
-assuming $\alpha' = 1$, the time varying infectivity $\beta'(t)$ is
-approximated by the best-fitting logistic sigmoid of the form $\beta_1
-+ (\beta_2 - \beta_1) \sigma(\frac{t - \tau}{T})$. Note that the
-number of observed cases is almost identical whereas the final
-fraction of susceptible individuals is vastly different. Indeed, in
-the first case the epidemic is stopped by group immunity whereas in
-the second case effective mitigation measures are
-imposed. Correspondingly, police implications would be vastly
-different in the two situations even though they are observationally
-indistinguishable.
+we obtain exactly the same number of observed cases, i.e. $O'_{t -
+  \tau} = O_{t}$. Note that as $\alpha' > \alpha$, we have that
+$S_{t} < S'_{t-\tau}$ and $S_t$ is a sigmoidal function of time due to
+the SIR dynamics. Furthermore, when the population is large, i.e. $N
+\gg 1$ and $S_0 \approx N$ the resulting $\beta'(t)$ is mostly driven
+by the drop in $S_{t+\tau}$ as compared to the much smaller change in
+$S'_t$. Indeed, \fig{SIRapprox} shows the dynamics of the above model
+with $\beta = 0.3, \gamma_I = \gamma_R = \frac{2}{10}$\footnote{Giving
+  rise to an $R_0$ of $3$.}, $\alpha = 0.1$ starting from $(N = 10^8,
+1, 0, 0, 0)$. In turn, assuming $\alpha' = 1$ and $\tau = 5$, the time
+varying infectivity $\beta'(t)$ is approximated by the best-fitting
+logistic sigmoid of the form $\beta_1 + (\beta_2 - \beta_1)
+\sigma(\frac{t - \tau}{T})$. Note that the number of observed cases is
+identical, just shifted by $\tau$, whereas the final fraction of susceptible
+individuals is vastly different. Indeed, in the first case the
+epidemic is stopped by group immunity whereas in the second case
+effective mitigation measures are imposed. Correspondingly, police
+implications would be vastly different in the two situations even
+though they are observationally indistinguishable.
 \begin{figure}
   \includegraphics[width=0.45\textwidth]{../figs/approx_infect.pdf}
   \includegraphics[width=0.45\textwidth]{../figs/approx_suscept.pdf}
   \caption{\label{fig:SIRapprox} Total cumulative observed infections
     and number of susceptible individuals in two simulated model with
-    observation fraction $\alpha = 0.1$ (true) and observation
-    fraction $\alpha' = 1$ (approx). In the second model, the epidemic
+    observation fractions $\alpha = 0.1$ (true), $\alpha' = 1$ and
+    time shift $\tau = 5$ (approx). In the second model, the epidemic
     is stopped due to mitigation measures which are modeled via
     $\beta'(t)$ as explained in the main text.}
 \end{figure}
@@ -388,7 +389,7 @@ indistinguishable.
 \subsection{Implications}
 
 Instead of detailed modeling of epidemic dynamics, which is further
-complicated due policy actions requiring felxible models with
+complicated due policy actions requiring flexible models with
 delicately chosen parameters, the present analysis is based on visual
 inspection of the reported data. Overall, relative case and deaths
 counts (observed for country $c$) seem to be related as follows:
@@ -400,8 +401,12 @@ where $a^c_r$ denotes the actual infections a fraction $\alpha^c \in
 [0, 1]$ is observed. A suitable reporting delay $\tau^c$ can be
 estimated by visual inspection of the data, but again the fraction of
 observed cases $\alpha^c$ and CFR $\mathrm{cfr}$ are not jointly
-identifiable. Yet, assumption three of a constant CFR across all
-countries allows to derive
+identifiable if there exist sets of parameters such that $a'_{t -
+  {\tau}} = \alpha a_t$, as is the case for dynamic SIR type
+models. In the end, any epidemic modeling implicitly or explicitly
+chooses a parametric form for the latent growth process $a_t$ and will
+not be identified if sufficiently flexible. Yet, assumption three of
+a constant CFR across all countries allows to derive
 \begin{enumerate}
 \item a range of values consistent among all countries,
 \item as well as recover the corresponding fraction of observed cases
@@ -452,21 +457,21 @@ the Covid-19 pandemic.
 \renewcommand\appendixname{Supplement}
 \beginsupplement
 
-\section{Data collapse by rescaling time}
+\section{Data collapse by re-scaling time}
 
 Aligning the data as in \fig{aligned_data} still shows
 country-specific differences in the temporal course of epidemic
-spreading. Much of this difference can ba attributed to the speed at
+spreading. Much of this difference can be attributed to the speed at
 which the epidemic spreads in different countries. Estimating the
 local growth rate of deaths $\frac{d\log d_t}{dt}$ by the three day
 running average of observed changes $\log d_{t+1} - \log d_t$,
 relative time, i.e. relative to the threshold of total deaths reached,
-is rescaled to match local growth rates. \fig{scaling} shows the
+is re-scaled to match local growth rates. \fig{scaling} shows the
 resulting data collapse for $d_t$ and the corresponding $c_t$ dynamics.
 \begin{figure}
   \includegraphics[width=1\textwidth]{../figs/ecdc_scaling_all.pdf}
   \caption{\label{fig:scaling} Aligned data as in \fig{aligned_data},
-    but time is additionally rescaled to match local growth rate of
+    but time is additionally re-scaled to match local growth rate of
     the epidemics.}
 \end{figure}
 
@@ -474,21 +479,21 @@ Further, taking the estimated relation between cases and deaths via
 CFR and country specific delays into account an almost complete data
 collapse for the cases is obtained. Not that as in the main text, data
 are aligned according to relative death counts only. Furthermore, the
-temporal rescaling is based on the estimated growth rate from the
+temporal re-scaling is based on the estimated growth rate from the
 death counts as well. Yet, shifting and scaling case data according to
 the estimated country specific delay and fraction of observed cases
 leads to an almost complete data collapse as well.
 \begin{figure}
   \includegraphics[width=1\textwidth]{../figs/ecdc_scaling_estdelay_cases.pdf}
   \caption{\label{fig:scaling_case_est} As \fig{aligned_case_est}, but
-    time is additionally rescaled to match local growth rate of the
+    time is additionally re-scaled to match local growth rate of the
     epidemics.}
 \end{figure}
 
 
 \section{NY Times style figures}
 
-As indidvidual countries can be hard to identify in Figures
+As individual countries can be hard to identify in Figures
 \ref{fig:aligned_data} and \ref{fig:aligned_case_est}, the NY Times
 featured panel views where each country is highlighted above a
 background of all countries. Here, I provide similar figures for
@@ -510,7 +515,7 @@ million inhabitants.
 
 Note that an SIR model already includes a natural delay between
 infections and recovery (or death). Indeed, the total number of cases
-is given by $C_t = I_t + R_t$ while the cumulated death toll is
+is given by $C_t = I_t + R_t$ while the cumulative death toll is
 obtained as $\mathrm{cfr} R_t$, i.e. modeling that a fraction of
 individuals does not recover but dies instead. Assuming that only a
 fraction $\alpha$ of cases is observed, the model is estimated with
@@ -520,7 +525,7 @@ the following sampling distribution
   D^{\mathrm{obs}}_{t+1} - D^{\mathrm{obs}}_t &\sim \mathrm{NegativeBinomial}\left(\mathrm{cfr} \frac{dR^{\mathrm{model}}_t}{dt}, \phi_D \right) \; .
 \end{align*}
 Thus, observed daily changes are related to the model implement
-changes via an overdispersed Poisson aka negative binomial
+changes via an over-dispersed Poisson aka negative binomial
 distribution. \fig{sir_fit} shows the resulting estimates assuming
 $\beta_t = \beta_1 + (\beta_2 - \beta_1) \sigma(\frac{t - \tau}{T})$
 and $\mathrm{cfr} = 1\%$\footnote{Due to the non-identifiability
@@ -529,7 +534,11 @@ and $\mathrm{cfr} = 1\%$\footnote{Due to the non-identifiability
 infectivity, via the logistic sigmoid $sigma(\cdot)$ in $\beta_t$
 reflecting the implementation of social distancing is clearly able to
 capture the epidemic dynamics. Yet, parameter uncertainties,
-especially about the reporting delay can be large.
+especially about the reporting delay can be large\footnote{The high
+  uncertainty could also reflect that an SIR dynamics is misspecified
+  in that it corresponds to an exponential delay distribution. Such
+  additional model assumptions need to be carefully chosen in order to
+  obtain meaningful parameter estimates.}.
 \begin{figure}
   \begin{minipage}{0.66\textwidth}
     \includegraphics[width=1\linewidth]{../figs/sir_pred_ITA.pdf}      

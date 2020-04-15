@@ -86,22 +86,27 @@ time. \cite{arxiv:2004.01105} assumes one or several (soft) step
 functions where the infection rate drops in response to different
 measures after these had been implemented.
 
-Unfortunately, building and fitting sufficiently complex models is not
-without substantial model risk. While models might be well capable of
-replicating observed data, predictions -- especially during the course
-of an exponentially growing epidemic -- are often sensitive to
-seemingly small details of model assumptions. They could even be
-non-identified in important ways. Here, I show that this is indeed the
-case for SIR type models with respect to the CFR and fraction of
-observed infections.
-
+Such detailed modeling is required in order to capture and forecast
+temporal dynamics of the epidemic spreading. Yet, substantial care is
+needed as to which parameters can be learned from the data and which
+cannot. Indeed, I show here that SIR type models -- and others
+exhibiting similarly flexible growth dynamics -- are non-identified with
+respect to the CFR and the fraction of observed infections.
+%% Unfortunately, building and fitting sufficiently complex models is not
+%% without substantial model risk. While models might be well capable of
+%% replicating observed data, predictions -- especially during the course
+%% of an exponentially growing epidemic -- are often sensitive to
+%% seemingly small details of model assumptions. They could even be
+%% non-identified in important ways. Here, I show that this is indeed the
+%% case for SIR type models with respect to the CFR and fraction of
+%% observed infections.
 Instead, a direct visual exploration of the data leads to valuable
-insights. In particular, I show that much of the variability relating
-reported case and death counts can be explained by two easily
-interpreted parameters. Furthermore, building on three simple
-assumptions this allows to lower bound the number of actual
-infections, including observed and unobserved cases. In turn,
-confirming recent estimates without complex and questionable modeling
+insights in this regard. In particular, much of the variability
+relating reported case and death counts can be explained by two easily
+interpreted parameters. Furthermore, based on three simple assumptions
+a lower bound on the number of actual infections, including observed
+and unobserved cases, can be obtained. In turn, confirming recent
+estimates without the need of complex and maybe questionable modeling
 choices.
 
 \section{Data exploration}
@@ -143,10 +148,16 @@ $1, 2, 4$ or $8$ deaths per million inhabitants respectively, i.e. $t
 \theta$ for $t < 0$. \fig{aligned_data} shows the resulting time
 course of relative case and death counts. Aligning dates in this
 fashion shows that several countries exhibit similar time courses,
-e.g. Belgium and Spain or China and South Korea. Yet, there are
-unexplained country specific differences and the data collapse is not
-as complete as often observed in physical systems exhibiting scaling
-laws \cite{stanley99}.
+e.g. Belgium and Spain or China and South Korea. As shown in the
+supplementary \fig{scaling} the remaining country specific differences
+can be explained by differences in growth rates.  Rescaling time
+according to the estimated doubling time indeed leads to a data
+collapse as complete as often observed in physical systems exhibiting
+scaling laws \cite{stanley99}.
+%% Yet, there are
+%% unexplained country specific differences and the data collapse is not
+%% as complete as often observed in physical systems exhibiting scaling
+%% laws \cite{stanley99}.
 \begin{figure}
   \includegraphics[width=1\textwidth]{../figs/ecdc_align_all.pdf}
   \caption{\label{fig:aligned_data} Relative case and death counts of
@@ -155,14 +166,14 @@ laws \cite{stanley99}.
     million respectively.}
 \end{figure}
 
-Here, I do not attempt to explain all these country specific
-differences. Instead, the relation between relative death and case
-counts is considered. While relative death counts exhibit similar time
-courses the corresponding relative case counts $c_t$ are more variable
-when aligned in the same fashion, i.e. relative to the first day that
-$d_t$ exceeds a given threshold. As I will argue now, most of this
-variability can be explained with two readily interpretable
-parameters.
+Here, these differences in the precise temporal dynamics of epidemic
+growth are not required.  Instead, the relation between relative death
+and case counts is considered. While relative death counts exhibit
+similar time courses the corresponding relative case counts $c_t$ are
+more variable when aligned in the same fashion, i.e. relative to the
+first day that $d_t$ exceeds a given threshold. As I will argue now,
+most of this variability can be explained with two readily
+interpretable parameters.
 
 \begin{hypothesis}
   \label{hyp:delay}
@@ -222,6 +233,11 @@ cases and deaths.
   \label{hyp:cfr}
   The true case fatality rate is the same for all countries.
 \end{hypothesis}
+
+\begin{figure}
+  \includegraphics[width=0.95\textwidth]{../figs/ecdc_aligned_case_est.pdf}
+  \caption{\label{fig:aligned_case_est}}
+\end{figure}
 
 \section{Discussion}
 
@@ -346,11 +362,57 @@ testing is urgently needed.
 \renewcommand\appendixname{Supplement}
 \beginsupplement
 
-\section{Additional figures}
+\section{Data collapse by rescaling time}
+
+Aligning the data as in \fig{aligned_data} still shows
+country-specific differences in the temporal course of epidemic
+spreading. Much of this difference can ba attributed to the speed at
+which the epidemic spreads in different countries. Estimating the
+local growth rate of deaths $\frac{d\log d_t}{dt}$ by the three day
+running average of observed changes $\log d_{t+1} - \log d_t$,
+relative time, i.e. relative to the threshold of total deaths reached,
+is rescaled to match local growth rates. \fig{scaling} shows the
+resulting data collapse for $d_t$ and the corresponding $c_t$ dynamics.
+\begin{figure}
+  \includegraphics[width=1\textwidth]{../figs/ecdc_scaling_all.pdf}
+  \caption{\label{fig:scaling} Aligned data as in \fig{aligned_data},
+    but time is additionally rescaled to match local growth rate of
+    the epidemics.}
+\end{figure}
+
+Further, taking the estimated relation between cases and deaths via
+CFR and country specific delays into account an almost complete data
+collapse for the cases is obtained. Not that as in the main text, data
+are aligned according to relative death counts only. Furthermore, the
+temporal rescaling is based on the estimated growth rate from the
+death counts as well. Yet, shifting and scaling case data according to
+the estimated country specific delay and fraction of observed cases
+leads to an almost complete data collapse as well.
+\begin{figure}
+  \includegraphics[width=1\textwidth]{../figs/ecdc_scaling_estdelay_cases.pdf}
+  \caption{\label{fig:scaling_case_est} As \fig{aligned_case_est}, but
+    time is additionally rescaled to match local growth rate of the
+    epidemics.}
+\end{figure}
+
+
+\section{NY Times style figures}
+
+As indidvidual countries can be hard to identify in Figures
+\ref{fig:aligned_data} and \ref{fig:aligned_case_est}, the NY Times
+featured panel views where each country is highlighted above a
+background of all countries. Here, I provide similar figures using a
+threshold of two deaths per million inhabitants.
+\begin{figure}
+  \includegraphics[width=1\textwidth]{../figs/ecdc_aligned_twopermill_nyt.pdf}
+  \caption{\label{fig:align_nyt} Details of aligned relative death
+    counts for threshold of two per million.}
+\end{figure}
 
 \begin{figure}
-  \includegraphics[width=1\textwidth]{../figs/ecdc_aligned_onepermill_nyt.pdf}
-  \caption{\label{fig:align_nyt}}
+  \includegraphics[width=1\textwidth]{../figs/ecdc_nyt_case_est_twopermill.pdf}
+  \caption{\label{fig:align_estcase_nyt} Details of aligned and
+    adjusted case counts for threshold of two per million.}
 \end{figure}
 
 \section{Uncertainty estimates from SIR model}

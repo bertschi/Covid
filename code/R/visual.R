@@ -167,13 +167,13 @@ plot_nytimes <- function (df) {
 }
 
 df_thresh %>%
-    filter(threshold == 1e-6 &
+    filter(threshold == 2e-6 &
            series == "deaths" &
            relday > -10 &
            country %in% country_codes) %>%
     plot_nytimes()
 
-ggsave("../../reports/figs/ecdc_aligned_onepermill_nyt.pdf")
+ggsave("../../reports/figs/ecdc_aligned_twopermill_nyt.pdf")
 
 ## Now select nicest alignment and compute case fatality rates for
 ## different delays between cases and deaths
@@ -321,12 +321,17 @@ df_thresh %>%
     geom_line(size = 1.2) +
     scale_y_log10() +
     scale_color_viridis_d() +
-    facet_wrap(~ type + threshold) +
+    facet_wrap(~ threshold) +
     coord_cartesian(xlim = c(-10, 40)) +
     theme_tufte() +
     theme(legend.position = "top",
           text = element_text(size = 12),
-          panel.grid.major.y = element_line(color = "grey"))
+          panel.grid.major.y = element_line(color = "grey")) +
+    labs(x = TeX("Relative days, shifted by estimated delay $\\tau$"),
+         y = TeX("Relative cases, including estimated unobserved cases"),
+         color = NULL)
+
+ggsave("../../reports/figs/ecdc_aligned_case_est.pdf")
 
 plot_nytimes(df_thresh %>%
              group_by_at(vars(-value)) %>%
@@ -335,7 +340,7 @@ plot_nytimes(df_thresh %>%
              spread(series, value) %>%
              select(- uid) %>%
              filter(country %in% country_codes) %>%
-             filter(type == "relative" & threshold == 1e-6) %>%
+             filter(type == "relative" & threshold == 2e-6) %>%
              left_join(df_est) %>%
              group_by(type, threshold, country) %>%
              mutate(relday = relday + delay_est,
@@ -344,31 +349,10 @@ plot_nytimes(df_thresh %>%
                     ylim = c(1e-7, 1e-1)) +
     theme(panel.grid.major.y = element_line(color = "grey"),
           panel.grid.minor.y = element_line(color = "lightgrey")) +
-    labs(x = "Relative days since one death per mill.",
+    labs(x = "Relative days since two death per mill.",
          y = "Relative count")
 
-ggsave("../../reports/figs/ecdc_nyt_case_est_onepermill.pdf")
-
-plot_nytimes(df_thresh %>%
-             group_by_at(vars(-value)) %>%
-             mutate(uid = 1:n()) %>%
-             ungroup() %>%
-             spread(series, value) %>%
-             select(- uid) %>%
-             filter(country %in% country_codes) %>%
-             filter(type == "relative" & threshold == 8e-6) %>%
-             left_join(df_est) %>%
-             group_by(type, threshold, country) %>%
-             mutate(relday = relday + delay_est,
-                    value = case_fct * cases)) +
-    coord_cartesian(xlim = c(-10, 40),
-                    ylim = c(1e-7, 1e-1)) +
-    theme(panel.grid.major.y = element_line(color = "grey"),
-          panel.grid.minor.y = element_line(color = "lightgrey")) +
-    labs(x = "Relative days since eight deaths per mill.",
-         y = "Relative count")
-
-ggsave("../../reports/figs/ecdc_nyt_case_est_eightpermill.pdf")
+ggsave("../../reports/figs/ecdc_nyt_case_est_twopermill.pdf")
 
 ## SIR fitting
 
@@ -382,7 +366,7 @@ rstan_options(auto_write = TRUE)
 model <- stan_model("../stan/sir.stan")
 
 foo <- df_thresh %>%
-    filter(country == "ITA" &
+    filter(country == "DEU" &
            threshold == 2e-6 &
            relday > -10) %>%
     arrange(relday) %>%
@@ -411,14 +395,19 @@ df_pred %>%
     arrange(t) %>%
     mutate(.change = .value - lag(.value)) %>%
     ungroup() %>%
-    ggplot(aes(t, .value / unique(foo$popData2018),
+    mutate(.variable = map_chr(.variable,
+                               ~ list(cases_pred = "Cases",
+                                      deaths_pred = "Deaths",
+                                      x_pred = "Model actual")[[.x]])) %>%
+    ggplot(aes(t - 10, .value / unique(foo$popData2018),
                color = .variable,
                group = interaction(.variable, .iteration, .chain))) +
     geom_line(alpha = 0.4) +
     scale_y_log10() +
     scale_color_colorblind() +
     theme_tufte() +
-    geom_line(aes(t, value / unique(foo$popData2018),
+    theme(text = element_text(size = 12)) +
+    geom_line(aes(t - 10, value / unique(foo$popData2018),
                   group = series),
               data = foo %>%
                   mutate(t = 1:n()) %>%
@@ -427,4 +416,27 @@ df_pred %>%
                   group_by(series) %>%
                   arrange(t) %>%
                   mutate(change = value - lag(value)),
-              color = "red")
+              color = "red",
+              size = 0.8) +
+    labs(x = "Relative days",
+         y = "Relative count",
+         color = NULL)
+
+ggsave("../../reports/figs/sir_pred_DEU.pdf")
+
+spread_draws(fit, gamma, p_obs) %>%
+    mutate(tau = rexp(n(), gamma)) %>%
+    rename(`Reporting delay` = tau,
+           `Observed fraction` = p_obs) %>%
+    gather(param, est,
+           `Reporting delay`, `Observed fraction`) %>%
+    ggplot(aes(est)) +
+    geom_density() +
+    facet_wrap(~ param,
+               scales = "free") +
+    theme_tufte() +
+    theme(text = element_text(size = 12)) +
+    labs(x = NULL,
+         y = "Posterior density")
+
+ggsave("../../reports/figs/sir_est_DEU.pdf")

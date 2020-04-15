@@ -105,10 +105,10 @@ df |> CSV.write("/tmp/foo.csv")
 ## df %>%
 ##     ggplot(aes(t, x3 + x5,
 ##                color = model)) +
-##     geom_line() +
+##     geom_line(size = 0.8) +
 ##     theme_tufte() +
 ##     theme(legend.position = "top",
-##           text = element_text(size = 12)) + 
+##           text = element_text(size = 14)) + 
 ##     scale_color_colorblind() +
 ##     labs(x = "Days",
 ##          y = TeX("Cumulated infections"),
@@ -119,10 +119,10 @@ df |> CSV.write("/tmp/foo.csv")
 ## df %>%
 ##     ggplot(aes(t, x1,
 ##                color = model)) +
-##     geom_line() +
+##     geom_line(size = 0.8) +
 ##     theme_tufte() +
 ##     theme(legend.position = "top",
-##           text = element_text(size = 12)) + 
+##           text = element_text(size = 14)) + 
 ##     scale_color_colorblind() +
 ##     labs(x = "Days",
 ##          y = TeX("Susceptible"),

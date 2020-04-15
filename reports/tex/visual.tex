@@ -10,6 +10,7 @@
 \usepackage{todonotes}
 \usepackage{listings}
 \usepackage{url}
+\usepackage{hyperref}
 
 \renewcommand{\v}[1]{\bm{#1}}
 \newcommand{\vx}{\v{x}}
@@ -38,9 +39,11 @@
   \renewcommand{\thefigure}{S\arabic{figure}}%
 }
 
-\title{A visual explanation of country specific differences in
-  Covid-19 data.}
-\author{Nils Bertschinger}
+\title{Visual explanation of country specific differences in
+  Covid-19 dynamics.}
+\author[1,2]{Nils Bertschinger \thanks{bertschinger@fias.uni-frankfurt.de}}
+\affil[1]{Department of Systemic Risk, Frankfurt Institute for Advanced Studies, Frankfurt am Main, Germany}
+\affil[2]{Department of Computer Science, Goethe University, Frankfurt am Main, Germany}
 
 \begin{document}
 
@@ -229,13 +232,53 @@ characteristic delay at which the estimated CFRs are essentially
 constant. Thus, reflecting the hypothesized delay between reported
 cases and deaths.
 
+This delay can either be estimated by visual inspection or by fitting
+a linear model on each delay and picking the one with minimal absolute
+slope\footnote{Just as an ad-hoc algorithm mimicking the visual
+  procedure.}. \fig{cfr} shows the delays $\tau$ and corresponding
+CFRs $\mathrm{cfr}_{\tau}$, i.e. the median CFR value at this delay,
+estimated for each country in this fashion. In order to fully relate
+the observed case with death counts an additional, and stronger,
+assumption is needed.
+
 \begin{hypothesis}
   \label{hyp:cfr}
   The true case fatality rate is the same for all countries.
 \end{hypothesis}
 
+While \hyp{cfr} ignores medical, demographic and other differences
+between countries, I believe it unlikely that the CFR is very
+different across different countries. In the end, its the same type of
+virus spreading in all countries. This suggests that differences in
+estimated CFRs simply reflect differences in the ability of countries
+to actually observe all infected individuals, i.e. due to more or less
+effective tracking and testing procedures. To illustrate this effect,
+a true CFR of $1\%$ is assumed in the following. This is consistent
+with current knowledge and had also been used in other studies
+\cite{imperial2}. Just from the estimated values any CFR below the
+minimum of all estimates (about $2\%$ found for Austria and South
+Korea) and above $0.1\%$ (which would imply an observed fraction above
+one for Belgium) is compatible with the data.
+
+\fig{estimates} shows the country specific estimates of reporting
+delay, CFR and fraction of observed cases (assuming a true CFR of
+$1\%$) obtained in this fashion. In turn, \fig{aligned_case_est} shows
+the implied relative case counts when shifted by the estimated delays
+and scaled to reflect the unobserved fraction of cases for each
+country. Notably, these implied counts all align nearly as good as the
+death counts in \fig{aligned_data} (right panel) even though the
+initial thresholding was based on the deaths counts alone. The
+supplementary \fig{scaling_case_est} shows that this holds also when
+rescaling time according to the growth rate of deaths. Overall, the
+collapse of implied case dynamics convincingly illustrates that the
+relation between case and death counts is fully and reliably captured
+by two parameters -- compatible with three reasonable assumptions.
 \begin{figure}
-  \includegraphics[width=0.95\textwidth]{../figs/ecdc_aligned_case_est.pdf}
+  \includegraphics[width=1\textwidth]{../figs/ecdc_estimates.pdf}
+  \caption{\label{fig:estimates}}
+\end{figure}
+\begin{figure}
+  \includegraphics[width=1\textwidth]{../figs/ecdc_aligned_case_est.pdf}
   \caption{\label{fig:aligned_case_est}}
 \end{figure}
 
@@ -320,15 +363,17 @@ resulting $\beta'(t)$ is mostly driven by the drop in $S_t$ as
 compared to the much smaller change in $S'_t$. Indeed, \fig{SIRapprox}
 shows the dynamics of the above model with $\beta = 0.3, \gamma_I =
 \gamma_R = \frac{2}{10}$\footnote{Giving rise to an $R_0$ of $3$.} and
-$\alpha = 0.1$ starting from $(N = 10^8, 1, 0, 0, 0)$. In turn, the
-dynamics is approximated by the best-fitting logistic sigmoid scaling
-$\beta'(t)$ and assuming $\alpha' = 1$. Note that the number of
-observed cases is almost identical whereas the final fraction of
-susceptible individuals is vastly different. Indeed, in the first case
-the epidemic is stopped by group immunity whereas in the second case
-effective mitigation measures are imposed. Correspondingly, police
-implications would be vastly different in the two situations even
-though they are observationally indistinguishable.
+$\alpha = 0.1$ starting from $(N = 10^8, 1, 0, 0, 0)$. In turn,
+assuming $\alpha' = 1$, the time varying infectivity $\beta'(t)$ is
+approximated by the best-fitting logistic sigmoid of the form $\beta_1
++ (\beta_2 - \beta_1) \sigma(\frac{t - \tau}{T})$. Note that the
+number of observed cases is almost identical whereas the final
+fraction of susceptible individuals is vastly different. Indeed, in
+the first case the epidemic is stopped by group immunity whereas in
+the second case effective mitigation measures are
+imposed. Correspondingly, police implications would be vastly
+different in the two situations even though they are observationally
+indistinguishable.
 \begin{figure}
   \includegraphics[width=0.45\textwidth]{../figs/approx_infect.pdf}
   \includegraphics[width=0.45\textwidth]{../figs/approx_suscept.pdf}
@@ -342,15 +387,60 @@ though they are observationally indistinguishable.
 
 \subsection{Implications}
 
-Furthermore, containment is challenging due to week
-long incubation times
-\cite{https://doi.org/10.1101/2020.03.25.20043109} but a conbination
+Instead of detailed modeling of epidemic dynamics, which is further
+complicated due policy actions requiring felxible models with
+delicately chosen parameters, the present analysis is based on visual
+inspection of the reported data. Overall, relative case and deaths
+counts (observed for country $c$) seem to be related as follows:
+\begin{align*}
+  d^c_t &= \mathrm{cfr} \cdot a^c_{t - {\tau^c}} \\
+  c^c_t &= \alpha^c \cdot a_t
+\end{align*}
+where $a^c_r$ denotes the actual infections a fraction $\alpha^c \in
+[0, 1]$ is observed. A suitable reporting delay $\tau^c$ can be
+estimated by visual inspection of the data, but again the fraction of
+observed cases $\alpha^c$ and CFR $\mathrm{cfr}$ are not jointly
+identifiable. Yet, assumption three of a constant CFR across all
+countries allows to derive
+\begin{enumerate}
+\item a range of values consistent among all countries,
+\item as well as recover the corresponding fraction of observed cases
+  in each country.
+\end{enumerate}
+
+Thereby, assuming a reasonable true CFR value, i.e. from the model
+implied range $0.1\%$ to $2\%$ which is also consistent with current
+knowledge, and using the estimated delay, the actual case numbers can
+be reconstructed. \fig{est_pop_frac} shows the resulting actual
+relative infection counts across several countries. Note that despite
+the simplicity of this analysis, the estimated numbers compare
+favorable \cite{imperial2}. Indeed, I would rather trust these even
+more as they do not rely on complex modeling assumptions but follow
+from visual inspection of the data.
+\begin{figure}
+  \includegraphics[width=1\textwidth]{../figs/ecdc_est_pop_frac.pdf}
+  \caption{\label{fig:est_pop_frac} Estimated fraction of population
+    already infected assuming a reasonable range of true CFRs.}
+\end{figure}
+
+Overall, I have illustrated that much of the variability between
+observed case and deaths counts between different countries can be
+explained by two parameters. Namely, the reporting delay $\tau$ and
+the fraction of observed cases. Especially the reporting delay
+exhibits crucial differences between countries and needs to be taken
+into account when comparing data and planning actions. In particular,
+containment is challenging when long incubation times are involved
+\cite{https://doi.org/10.1101/2020.03.25.20043109} but a combination
 of case tracing and isolation policies could be effective
-\cite{fraser04,kubinec}. On the other hand, if most cases are actually
-known effective policies can be implemented as evidenced in the
-currently successful containment in China and South Korea. In the end,
-data analysis alone only gets us only that far and more extensive
-testing is urgently needed.
+\cite{fraser04,kubinec}. Thus, detailed epidemic modeling is certainly
+needed in order to judge the effectiveness of current mitigation
+measures across different countries \cite{imperial2,arxiv:2004.01105}.
+On the other hand, important parameters need to fixed based on
+additional knowledge as they cannot be identified within sufficiently
+flexible models. In the end, data analysis and detailed modeling alone
+only gets us only that far and more extensive testing is urgently
+needed to obtain reliable knowledge about the current progression of
+the Covid-19 pandemic.
 
 
 \bibliographystyle{abbrv}
@@ -401,18 +491,19 @@ leads to an almost complete data collapse as well.
 As indidvidual countries can be hard to identify in Figures
 \ref{fig:aligned_data} and \ref{fig:aligned_case_est}, the NY Times
 featured panel views where each country is highlighted above a
-background of all countries. Here, I provide similar figures using a
-threshold of two deaths per million inhabitants.
+background of all countries. Here, I provide similar figures for
+relative death and case counts using a threshold of two deaths per
+million inhabitants.
 \begin{figure}
   \includegraphics[width=1\textwidth]{../figs/ecdc_aligned_twopermill_nyt.pdf}
   \caption{\label{fig:align_nyt} Details of aligned relative death
-    counts for threshold of two per million.}
+    counts for threshold of two deaths per million.}
 \end{figure}
 
 \begin{figure}
   \includegraphics[width=1\textwidth]{../figs/ecdc_nyt_case_est_twopermill.pdf}
   \caption{\label{fig:align_estcase_nyt} Details of aligned and
-    adjusted case counts for threshold of two per million.}
+    adjusted case counts for threshold of two deaths per million.}
 \end{figure}
 
 \section{Uncertainty estimates from SIR model}
@@ -431,15 +522,38 @@ the following sampling distribution
 Thus, observed daily changes are related to the model implement
 changes via an overdispersed Poisson aka negative binomial
 distribution. \fig{sir_fit} shows the resulting estimates assuming
-$\beta_t = \beta_1 + (\beta_2 - \beta_1) \frac{1}{1 + e^{- \frac{t -
-      \tau}{T} }}$ and $\mathrm{cfr} = 1\%$\footnote{Due to the
-  non-identifiability derived in the main text either $\alpha$ or
-  $\mathrm{cfr}$ needs to be fixed.}.
-
+$\beta_t = \beta_1 + (\beta_2 - \beta_1) \sigma(\frac{t - \tau}{T})$
+and $\mathrm{cfr} = 1\%$\footnote{Due to the non-identifiability
+  derived in the main text either $\alpha$ or $\mathrm{cfr}$ needs to
+  be fixed.}.  The SIR model assuming a single change point in the
+infectivity, via the logistic sigmoid $sigma(\cdot)$ in $\beta_t$
+reflecting the implementation of social distancing is clearly able to
+capture the epidemic dynamics. Yet, parameter uncertainties,
+especially about the reporting delay can be large.
 \begin{figure}
-  
-  \caption{\label{fig:sir_fit}}
-  
+  \begin{minipage}{0.66\textwidth}
+    \includegraphics[width=1\linewidth]{../figs/sir_pred_ITA.pdf}      
+  \end{minipage}
+  \begin{minipage}{0.33\textwidth}
+    \includegraphics[width=1\linewidth]{../figs/sir_est_tau_ITA.pdf}
+    \includegraphics[width=1\linewidth]{../figs/sir_est_fobs_ITA.pdf}
+  \end{minipage}
+  \begin{minipage}{0.66\textwidth}
+    \includegraphics[width=1\linewidth]{../figs/sir_pred_DEU.pdf}      
+  \end{minipage}
+  \begin{minipage}{0.33\textwidth}
+    \includegraphics[width=1\linewidth]{../figs/sir_est_tau_DEU.pdf}
+    \includegraphics[width=1\linewidth]{../figs/sir_est_fobs_DEU.pdf}
+  \end{minipage}
+  \caption{\label{fig:sir_fit} Model predictions and estimated
+    parameters from SIR model fitted to data from Italy (top) and
+    Germany (bottom).}
 \end{figure}
+
+Bayesian estimates have been carried out using {\em Stan} (full code
+available from my
+\href{Github}{\url{https://github.com/bertschi/Covid}} repository) and
+using weakly informative broad normal or student-t prior distributions
+on all parameters.
 
 \end{document}

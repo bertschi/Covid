@@ -290,9 +290,11 @@ df_est %>%
                    label_parsed(map(labels, ~ TeX(.x)),
                                 multi_line)
                }) +
-    scale_shape_manual(values = c(1, 5, 21, 23)) +
+    ## scale_shape_manual(values = c(1, 5, 21, 23)) +
+    scale_shape_manual(values = c(21, 22, 24, 25)) +
     theme_tufte() +
     theme(text = element_text(size = 12),
+          legend.position = "top",
           panel.grid.major.y = element_line(color = "lightgrey"),
           ## panel.border = element_rect(fill = NA, color = "grey")
           ) +
@@ -301,6 +303,69 @@ df_est %>%
          size = "# data")
 
 ggsave("../../reports/figs/ecdc_estimates.pdf")
+
+## Find range of cfr values compatible with country estimates (using
+## assumption 3 of constant true cfr)
+
+df_thresh %>%
+    group_by_at(vars(-value)) %>%
+    mutate(uid = 1:n()) %>%
+    ungroup() %>%
+    spread(series, value) %>%
+    select(- uid) %>%
+    filter(country %in% country_codes) %>%
+    left_join(df_est) %>%
+    drop_na() %>%
+    group_by(type, threshold, country) %>%
+    filter(relday == max(relday)) %>%
+    mutate(act_cases = case_fct * cases,
+           cfr_min = cfr_est * cases) %>%
+    ungroup() %>%
+    group_by(type, threshold) %>%
+    summarize(cfr_low = max(cfr_min),
+              country_low = country[which(cfr_min == cfr_low)],
+              cfr_high = min(cfr_est),
+              country_high = country[which(cfr_est == cfr_high)])
+
+## Create table/plot of already infected fractions
+tab_inf <- df_thresh %>%
+    group_by_at(vars(-value)) %>%
+    mutate(uid = 1:n()) %>%
+    ungroup() %>%
+    spread(series, value) %>%
+    select(- uid) %>%
+    filter(country %in% country_codes) %>%
+    left_join(df_est %>%
+              ## Assume true cfr of 0.5, 1 and 1.5 percent
+              crossing(tibble(cfr_true = c(0.5, 1, 1.5) / 100))) %>%
+    drop_na() %>%
+    group_by(type, threshold, country, cfr_true) %>%
+    filter(relday == max(relday)) %>%
+    summarize(date = date,
+              pop_frac = cases * cfr_est / cfr_true) %>%
+    ungroup() %>%
+    arrange(country, cfr_true, type, threshold)
+
+tab_inf %>%
+    ggplot(aes(country, pop_frac,
+               shape = factor(threshold),
+               fill = factor(cfr_true),
+               color = factor(cfr_true))) +
+    geom_point(size = 1,
+               position = position_dodge(width = 0.8)) +
+    scale_shape_manual(values = c(21, 22, 24, 25)) +
+    scale_fill_colorblind(guide = FALSE) +
+    scale_color_colorblind() +
+    theme_tufte() +
+    theme(text = element_text(size = 12),
+          legend.position = "top",
+          panel.grid.major.y = element_line(color = "lightgrey")) +
+    labs(x = NULL,
+         y = "Population fraction infected",
+         shape = "Threshold",
+         color = "Assumed true CFR")
+
+ggsave("../../reports/figs/ecdc_est_pop_frac.pdf")
 
 ## Show case data shifted and scaled according to estimates
 
@@ -365,8 +430,9 @@ rstan_options(auto_write = TRUE)
 
 model <- stan_model("../stan/sir.stan")
 
+cty_plt <- "ITA"
 foo <- df_thresh %>%
-    filter(country == "DEU" &
+    filter(country == !!cty_plt &
            threshold == 2e-6 &
            relday > -10) %>%
     arrange(relday) %>%
@@ -422,21 +488,32 @@ df_pred %>%
          y = "Relative count",
          color = NULL)
 
-ggsave("../../reports/figs/sir_pred_DEU.pdf")
+ggsave(paste0("../../reports/figs/sir_pred_", cty_plt, ".pdf"))
 
-spread_draws(fit, gamma, p_obs) %>%
+spread_draws(fit, gamma) %>%
     mutate(tau = rexp(n(), gamma)) %>%
-    rename(`Reporting delay` = tau,
-           `Observed fraction` = p_obs) %>%
-    gather(param, est,
-           `Reporting delay`, `Observed fraction`) %>%
-    ggplot(aes(est)) +
-    geom_density() +
-    facet_wrap(~ param,
-               scales = "free") +
+    ggplot(aes(tau)) +
+    geom_density(fill = "grey") +
+    scale_x_log10() +
+    coord_cartesian(xlim = c(0.1, 200)) +
     theme_tufte() +
     theme(text = element_text(size = 12)) +
     labs(x = NULL,
-         y = "Posterior density")
+         y = "Posterior density",
+         title = cty_plt,
+         subtitle = TeX("Reporting delay $\\tau$"))
 
-ggsave("../../reports/figs/sir_est_DEU.pdf")
+ggsave(paste0("../../reports/figs/sir_est_tau_", cty_plt, ".pdf"))
+
+spread_draws(fit, p_obs) %>%
+    ggplot(aes(p_obs)) +
+    geom_density(fill = "grey") +
+    coord_cartesian(xlim = c(0, 1)) +
+    theme_tufte() +
+    theme(text = element_text(size = 12)) +
+    labs(x = NULL,
+         y = "Posterior density",
+         title = cty_plt,
+         subtitle = TeX("Fraction of observed cases"))
+
+ggsave(paste0("../../reports/figs/sir_est_fobs_", cty_plt, ".pdf"))
